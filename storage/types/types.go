@@ -1,4 +1,4 @@
-package storagetypes
+package types
 
 type StorageProvider string
 

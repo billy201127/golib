@@ -8,24 +8,24 @@ import (
 
 	"gomod.pri/golib/storage/obs"
 	"gomod.pri/golib/storage/oss"
-	storagetypes "gomod.pri/golib/storage/types"
+	"gomod.pri/golib/storage/types"
 )
 
 type Storage interface {
-	UploadFile(ctx context.Context, bucket storagetypes.Bucket, remote, local string) error
-	UploadStream(ctx context.Context, bucket storagetypes.Bucket, remote string, stream io.Reader) error
+	UploadFile(ctx context.Context, bucket types.Bucket, remote, local string) error
+	UploadStream(ctx context.Context, bucket types.Bucket, remote string, stream io.Reader) error
 
-	DownloadFile(ctx context.Context, bucket storagetypes.Bucket, remote, local string) error
-	DownloadStream(ctx context.Context, bucket storagetypes.Bucket, remote string) (io.ReadCloser, error)
+	DownloadFile(ctx context.Context, bucket types.Bucket, remote, local string) error
+	DownloadStream(ctx context.Context, bucket types.Bucket, remote string) (io.ReadCloser, error)
 }
 
-func NewStorage(appId string, cfg storagetypes.Config) (Storage, error) {
-	provider := storagetypes.StorageProvider(strings.ToLower(cfg.Provider))
+func NewStorage(appId string, cfg types.Config) (Storage, error) {
+	provider := types.StorageProvider(strings.ToLower(cfg.Provider))
 
 	switch provider {
-	case storagetypes.StorageProviderOBS:
+	case types.StorageProviderOBS:
 		return obs.NewClient(cfg.AccessKey, cfg.SecretKey, cfg.Endpoint, appId)
-	case storagetypes.StorageProviderOSS:
+	case types.StorageProviderOSS:
 		return oss.NewClient(cfg.Endpoint, appId, cfg.AccessKey, cfg.SecretKey)
 	default:
 		return nil, fmt.Errorf("Unsupported storage provider: %s", cfg.Provider)
