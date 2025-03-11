@@ -37,8 +37,13 @@ var errorMetric = metric.NewCounterVec(&metric.CounterVecOpts{
 	Labels:    []string{"code", "msg", "critical"},
 })
 
-func New(code int, err error) *CodeError {
+func New(code int, err error, useErrMsg ...bool) *CodeError {
 	ce := &CodeError{Code: code, Err: err}
+
+	if len(useErrMsg) > 0 && useErrMsg[0] {
+		ce.Msg = err.Error()
+		return ce
+	}
 
 	if v, ok := ErrMsgs[code]; ok {
 		ce.Msg = v
