@@ -26,7 +26,7 @@ func NewStorage(appId string, cfg types.Config) (Storage, error) {
 	case types.StorageProviderOBS:
 		return obs.NewClient(cfg.AccessKey, cfg.SecretKey, cfg.Endpoint, appId)
 	case types.StorageProviderOSS:
-		return oss.NewClient(cfg.Endpoint, appId, cfg.AccessKey, cfg.SecretKey)
+		return oss.NewClient(cfg.Endpoint, cfg.Region, appId, cfg.AccessKey, cfg.SecretKey)
 	default:
 		return nil, fmt.Errorf("Unsupported storage provider: %s", cfg.Provider)
 	}

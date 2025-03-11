@@ -10,6 +10,7 @@ const (
 type Config struct {
 	Provider  string
 	Endpoint  string
+	Region    string
 	AccessKey string
 	SecretKey string
 }
