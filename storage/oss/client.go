@@ -17,10 +17,10 @@ type Client struct {
 	ossClient *aliOss.Client
 }
 
-func NewClient(region string, appId string, ak, sk string) (*Client, error) {
+func NewClient(endpoint string, appId string, ak, sk string) (*Client, error) {
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider(ak, sk)).
-		WithRegion(region)
+		WithEndpoint(endpoint)
 
 	client := oss.NewClient(cfg)
 
