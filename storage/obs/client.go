@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"io"
 
-	storagetypes "golib/storage/types"
-
 	huaweiObs "github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"github.com/zeromicro/go-zero/core/logc"
+	storagetypes "gomod.pri/golib/storage/types"
 )
 
 type Client struct {

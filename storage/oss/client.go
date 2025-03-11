@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"io"
 
-	storagetypes "golib/storage/types"
-
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	aliOss "github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"github.com/zeromicro/go-zero/core/logc"
+	storagetypes "gomod.pri/golib/storage/types"
 )
 
 type Client struct {

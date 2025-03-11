@@ -6,9 +6,9 @@ import (
 	"io"
 	"strings"
 
-	"golib/storage/obs"
-	"golib/storage/oss"
-	storagetypes "golib/storage/types"
+	"gomod.pri/golib/storage/obs"
+	"gomod.pri/golib/storage/oss"
+	storagetypes "gomod.pri/golib/storage/types"
 )
 
 type Storage interface {
