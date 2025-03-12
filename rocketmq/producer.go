@@ -2,9 +2,11 @@ package rocketmq
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	rmq "github.com/apache/rocketmq-clients/golang/v5"
+	"github.com/apache/rocketmq-clients/golang/v5/credentials"
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -13,7 +15,8 @@ import (
 
 func NewProducer(appId string, endpoint string) *Producer {
 	producer, err := rmq.NewProducer(&rmq.Config{
-		Endpoint: endpoint,
+		Endpoint:    endpoint,
+		Credentials: &credentials.SessionCredentials{},
 	})
 	if err != nil {
 		logx.Errorf("init producer failed: %v", err)
@@ -110,8 +113,12 @@ func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ..
 
 	// send message with timeout context
 	sendCtx, cancel := context.WithTimeout(ctx, opt.timeout)
+	fmt.Println(p)
+	fmt.Println(message)
+	fmt.Println(sendCtx)
+
 	result, err := p.Send(sendCtx, message)
-	cancel()
+	defer cancel()
 
 	if err != nil {
 		logx.WithContext(ctx).Errorf("send message failed: %v, topic: %s, msg: %s", err, actualTopic, string(msg))
@@ -120,10 +127,11 @@ func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ..
 		return err
 	}
 
+	// 这里需要添加结果的空值检查
 	span.SetAttributes(
 		attribute.String("message.id", result[0].MessageID),
 	)
 
-	logx.WithContext(ctx).Infof("send message success: %v", result)
+	logx.WithContext(ctx).Infof("send message success, messageID: %s", result[0].MessageID)
 	return nil
 }
