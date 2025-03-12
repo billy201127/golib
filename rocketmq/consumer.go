@@ -177,13 +177,19 @@ func (c *Consumer[T]) consume() {
 				if err = json.Unmarshal(msg.GetBody(), &data); err != nil {
 					c.handler.ErrorHandler(msgCtx, data, err)
 					msgSpan.RecordError(err)
+					if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
+						msgSpan.RecordError(ackErr)
+					}
 					msgSpan.End()
 					continue
 				}
 
 				if err = c.handler.Consume(msgCtx, data); err != nil {
-					msgSpan.RecordError(err)
 					c.handler.ErrorHandler(msgCtx, data, err)
+					msgSpan.RecordError(err)
+					if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
+						msgSpan.RecordError(ackErr)
+					}
 					msgSpan.End()
 					continue
 				}
