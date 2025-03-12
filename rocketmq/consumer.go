@@ -167,7 +167,6 @@ func (c *Consumer[T]) consume() {
 					trace.WithAttributes(
 						attribute.String("message.topic", msg.GetTopic()),
 						attribute.String("message.id", msg.GetMessageId()),
-						attribute.String("message.tag", *msg.GetTag()),
 						attribute.Int("message.size", len(msg.GetBody())),
 						attribute.String("parent.trace_id", parentTraceID),
 						attribute.String("parent.span_id", parentSpanID),
