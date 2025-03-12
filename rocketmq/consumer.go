@@ -146,12 +146,13 @@ func (c *Consumer[T]) consume() {
 		default:
 			msgs, err := c.consumer.Receive(context.Background(), maxMessageNum, invisibleDuration)
 			if err != nil {
-				var errRpcStatus *rmq.ErrRpcStatus
-				if errors.Is(err, errRpcStatus) && v2.Code(errRpcStatus.Code) == v2.Code_MESSAGE_NOT_FOUND {
+				if rpcErr, ok := err.(*rmq.ErrRpcStatus); ok && v2.Code(rpcErr.Code) == v2.Code_MESSAGE_NOT_FOUND {
+					// 消息未找到是正常情况，静默处理并等待
 					time.Sleep(awaitDuration)
-				} else {
-					logx.Errorf("receive message failed: %v", err)
+					continue
 				}
+				// 只有在非 MESSAGE_NOT_FOUND 的错误情况下才打印日志
+				logx.Errorf("receive message failed: %v", err)
 				continue
 			}
 
