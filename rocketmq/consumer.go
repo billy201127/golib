@@ -146,10 +146,11 @@ func (c *Consumer[T]) consume() {
 		default:
 			msgs, err := c.consumer.Receive(context.Background(), maxMessageNum, invisibleDuration)
 			if err != nil {
-				logx.Errorf("receive message failed: %v", err)
-				var ce *rmq.ErrRpcStatus
-				if errors.Is(ce, err) && v2.Code(ce.Code) == v2.Code_MESSAGE_NOT_FOUND {
+				var errRpcStatus *rmq.ErrRpcStatus
+				if errors.Is(err, errRpcStatus) && v2.Code(errRpcStatus.Code) == v2.Code_MESSAGE_NOT_FOUND {
 					time.Sleep(awaitDuration)
+				} else {
+					logx.Errorf("receive message failed: %v", err)
 				}
 				continue
 			}
