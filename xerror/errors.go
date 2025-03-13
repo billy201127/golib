@@ -2,6 +2,7 @@ package xerror
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -38,6 +39,10 @@ var errorMetric = metric.NewCounterVec(&metric.CounterVecOpts{
 })
 
 func New(code int, err error, useErrMsg ...bool) *CodeError {
+	if err == nil {
+		err = errors.New("error not set")
+	}
+
 	ce := &CodeError{Code: code, Err: err}
 
 	if len(useErrMsg) > 0 && useErrMsg[0] {
