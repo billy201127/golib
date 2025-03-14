@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +14,8 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -48,19 +49,7 @@ func NewConsumer[T any](conf *ConsumerConfig, handler ConsumeHandler[T]) (*Consu
 	if conf == nil {
 		return nil, errors.New("NewRocketMqConsumer config is nil")
 	}
-
-	// ************** init rocketmq client log start ************** //
-	if err := os.Setenv(rmq.CLIENT_LOG_ROOT, "./rocketmqlogs"); err != nil {
-		return nil, err
-	}
-	if err := os.Setenv(rmq.ENABLE_CONSOLE_APPENDER, "true"); err != nil {
-		return nil, err
-	}
-	if err := os.Setenv(rmq.CLIENT_LOG_LEVEL, "warn"); err != nil {
-		return nil, err
-	}
-	rmq.ResetLogger()
-	// *************** init rocketmq client log end *************** //
+	SetLogger()
 	opts := []rmq.SimpleConsumerOption{rmq.WithAwaitDuration(awaitDuration)}
 	tagsExp := rmq.SUB_ALL
 	if len(conf.Tags) > 0 {
@@ -124,6 +113,8 @@ func (c *Consumer[T]) Start() {
 		c.wg.Add(1)
 		go func() {
 			defer c.wg.Done()
+			// 这个 sleep 是必要的，5.x 版本的 proxy 有 bug，导致第一次接收消息失败
+			time.Sleep(time.Millisecond * 100)
 			c.consume()
 		}()
 	}
@@ -138,6 +129,7 @@ func (c *Consumer[T]) Stop() {
 
 func (c *Consumer[T]) consume() {
 	tracer := otel.Tracer("rocket-consumer")
+	prop := propagation.TraceContext{}
 
 	for {
 		select {
@@ -156,27 +148,42 @@ func (c *Consumer[T]) consume() {
 				continue
 			}
 
-			// deal msg
 			for _, msg := range msgs {
 				props := msg.GetProperties()
-				parentTraceID := props["trace_id"]
-				parentSpanID := props["span_id"]
+				// 打印接收到的消息属性
+				// logx.Infof("Received message properties: %+v", props)
 
-				// create context with parent span information
-				msgCtx, msgSpan := tracer.Start(context.Background(), "rocket.Consumer.ProcessMessage",
+				carrier := propagation.MapCarrier{}
+				for k, v := range props {
+					carrier[k] = v
+				}
+
+				ctx := context.Background()
+				ctx = prop.Extract(ctx, carrier)
+
+				// 检查是否成功提取了 trace context
+				// if spanCtx := trace.SpanContextFromContext(ctx); spanCtx.IsValid() {
+				// 	logx.Infof("Extracted trace_id: %s", spanCtx.TraceID().String())
+				// } else {
+				// 	logx.Info("No valid trace context extracted")
+				// }
+
+				msgCtx, msgSpan := tracer.Start(ctx, "rocket.Consumer.ProcessMessage",
 					trace.WithAttributes(
 						attribute.String("message.topic", msg.GetTopic()),
 						attribute.String("message.id", msg.GetMessageId()),
-						attribute.Int("message.size", len(msg.GetBody())),
-						attribute.String("parent.trace_id", parentTraceID),
-						attribute.String("parent.span_id", parentSpanID),
 					),
+					trace.WithSpanKind(trace.SpanKindConsumer),
 				)
+
+				// 打印新创建的 span 的 trace context
+				// logx.Infof("New span trace_id: %s", msgSpan.SpanContext().TraceID().String())
 
 				var data T
 				if err = json.Unmarshal(msg.GetBody(), &data); err != nil {
 					c.handler.ErrorHandler(msgCtx, data, err)
 					msgSpan.RecordError(err)
+					msgSpan.SetStatus(codes.Error, err.Error())
 					if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
 						msgSpan.RecordError(ackErr)
 					}
@@ -187,6 +194,7 @@ func (c *Consumer[T]) consume() {
 				if err = c.handler.Consume(msgCtx, data); err != nil {
 					c.handler.ErrorHandler(msgCtx, data, err)
 					msgSpan.RecordError(err)
+					msgSpan.SetStatus(codes.Error, err.Error())
 					if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
 						msgSpan.RecordError(ackErr)
 					}
@@ -197,6 +205,9 @@ func (c *Consumer[T]) consume() {
 				// ack
 				if err = c.consumer.Ack(msgCtx, msg); err != nil {
 					msgSpan.RecordError(err)
+					msgSpan.SetStatus(codes.Error, err.Error())
+				} else {
+					msgSpan.SetStatus(codes.Ok, "")
 				}
 
 				msgSpan.End()

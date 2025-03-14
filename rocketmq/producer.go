@@ -2,7 +2,6 @@ package rocketmq
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	rmq "github.com/apache/rocketmq-clients/golang/v5"
@@ -10,10 +9,13 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
 func NewProducer(appId string, endpoint string) *Producer {
+	SetLogger()
 	producer, err := rmq.NewProducer(&rmq.Config{
 		Endpoint:    endpoint,
 		Credentials: &credentials.SessionCredentials{},
@@ -74,13 +76,41 @@ func WithShardingKey(shardingKey string) PublishOptionFunc {
 func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
 	actualTopic := GetTopicName(string(p.appId), topic)
 
+	// 检查输入的 context 中是否已有 trace
+	// if spanCtx := trace.SpanContextFromContext(ctx); spanCtx.IsValid() {
+	// 	logx.Infof("Input context trace_id: %s", spanCtx.TraceID().String())
+	// }
+
 	ctx, span := otel.Tracer("rocket-producer").Start(ctx, "rocket.Producer.Publish",
 		trace.WithAttributes(
 			attribute.String("topic", actualTopic),
 			attribute.Int("message.size", len(msg)),
 		),
+		trace.WithSpanKind(trace.SpanKindProducer),
 	)
 	defer span.End()
+
+	// 使用 W3C trace context 格式
+	prop := propagation.TraceContext{}
+	carrier := propagation.MapCarrier{}
+	prop.Inject(ctx, carrier)
+
+	message := &rmq.Message{
+		Topic: actualTopic,
+		Body:  msg,
+	}
+
+	// 打印要传递的 trace context
+	// logx.Infof("Injecting trace context: %+v", carrier)
+
+	// 将 trace context 添加到消息属性
+	for k, v := range carrier {
+		message.AddProperty(k, v)
+	}
+
+	// 为了兼容性，同时保留原有的 trace_id 和 span_id
+	message.AddProperty("trace_id", span.SpanContext().TraceID().String())
+	message.AddProperty("span_id", span.SpanContext().SpanID().String())
 
 	opt := &PublishOption{
 		timeout: 5 * time.Second,
@@ -89,49 +119,32 @@ func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ..
 		o(opt)
 	}
 
-	message := &rmq.Message{
-		Topic: actualTopic,
-		Body:  msg,
-	}
 	if opt.ShardingKey != "" {
 		message.SetKeys(opt.ShardingKey)
 	}
 
-	// add trace context as message attribute
-	traceID := span.SpanContext().TraceID().String()
-	spanID := span.SpanContext().SpanID().String()
-	message.AddProperty("trace_id", traceID)
-	message.AddProperty("span_id", spanID)
-
-	// if delay time is set, set delay delivery
+	// 如果设置了延迟时间，设置延迟投递
 	if opt.delay > 0 {
 		deliveryTime := time.Now().Add(opt.delay)
 		message.SetDelayTimestamp(deliveryTime)
-
 		span.SetAttributes(attribute.Int64("delay.ms", opt.delay.Milliseconds()))
 	}
 
-	// send message with timeout context
+	// 使用超时上下文发送消息
 	sendCtx, cancel := context.WithTimeout(ctx, opt.timeout)
-	fmt.Println(p)
-	fmt.Println(message)
-	fmt.Println(sendCtx)
-
-	result, err := p.Send(sendCtx, message)
 	defer cancel()
 
+	result, err := p.Send(sendCtx, message)
 	if err != nil {
-		logx.WithContext(ctx).Errorf("send message failed: %v, topic: %s, msg: %s", err, actualTopic, string(msg))
 		span.RecordError(err)
-		logx.WithContext(ctx).Errorf("send message failed: %v", err)
+		span.SetStatus(codes.Error, err.Error())
+		logx.WithContext(ctx).Errorf("send message failed: %v, topic: %s, msg: %s", err, actualTopic, string(msg))
 		return err
 	}
 
-	// 这里需要添加结果的空值检查
-	span.SetAttributes(
-		attribute.String("message.id", result[0].MessageID),
-	)
+	// 设置成功状态和消息ID
+	span.SetStatus(codes.Ok, "")
+	span.SetAttributes(attribute.String("message.id", result[0].MessageID))
 
-	logx.WithContext(ctx).Infof("send message success, messageID: %s", result[0].MessageID)
 	return nil
 }
