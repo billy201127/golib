@@ -82,7 +82,7 @@ func (c *Client) DownloadStream(ctx context.Context, bucket storagetypes.Bucket,
 }
 
 func (c *Client) SignUrl(ctx context.Context, bucket storagetypes.Bucket, remote string, expires int) (string, error) {
-	req, err := c.ossClient.Presign(context.Background(), &oss.GetObjectRequest{
+	req, err := c.ossClient.Presign(ctx, &oss.GetObjectRequest{
 		Bucket: oss.Ptr(string(bucket)),
 		Key:    oss.Ptr(fmt.Sprintf("%s/%s", c.AppId, remote)),
 	}, oss.PresignExpires(time.Second*time.Duration(expires)))
