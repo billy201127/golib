@@ -83,3 +83,19 @@ func (c *Client) DownloadStream(ctx context.Context, bucket storagetypes.Bucket,
 
 	return output.Body, err
 }
+
+func (c *Client) SignUrl(ctx context.Context, bucket storagetypes.Bucket, remote string, expires int) (string, error) {
+	input := &huaweiObs.CreateSignedUrlInput{
+		Bucket:  string(bucket),
+		Key:     fmt.Sprintf("%s/%s", c.AppId, remote),
+		Expires: expires,
+	}
+
+	output, err := c.obsClient.CreateSignedUrl(input)
+	if err != nil {
+		logc.Errorf(ctx, "Create signed url error: %v", err)
+		return "", err
+	}
+
+	return output.SignedUrl, nil
+}

@@ -17,6 +17,8 @@ type Storage interface {
 
 	DownloadFile(ctx context.Context, bucket types.Bucket, remote, local string) error
 	DownloadStream(ctx context.Context, bucket types.Bucket, remote string) (io.ReadCloser, error)
+
+	SignUrl(ctx context.Context, bucket types.Bucket, remote string, expires int) (string, error)
 }
 
 func NewStorage(appId string, cfg types.Config) (Storage, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	aliOss "github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
@@ -24,7 +25,6 @@ func NewClient(endpoint string, region string, appId string, ak, sk string) (*Cl
 		WithRegion(region)
 
 	client := oss.NewClient(cfg)
-
 	return &Client{ossClient: client, AppId: appId}, nil
 }
 
@@ -79,4 +79,16 @@ func (c *Client) DownloadStream(ctx context.Context, bucket storagetypes.Bucket,
 	defer result.Body.Close()
 
 	return result.Body, err
+}
+
+func (c *Client) SignUrl(ctx context.Context, bucket storagetypes.Bucket, remote string, expires int) (string, error) {
+	req, err := c.ossClient.Presign(context.Background(), &oss.GetObjectRequest{
+		Bucket: oss.Ptr(string(bucket)),
+		Key:    oss.Ptr(fmt.Sprintf("%s/%s", c.AppId, remote)),
+	}, oss.PresignExpires(time.Second*time.Duration(expires)))
+	if err != nil {
+		logc.Errorf(ctx, "Sign url error, errMsg: %s", err.Error())
+	}
+
+	return req.URL, nil
 }
