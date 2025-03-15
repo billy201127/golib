@@ -6,7 +6,6 @@ import (
 	"github.com/apolloconfig/agollo/v4"
 	"github.com/apolloconfig/agollo/v4/env/config"
 	"github.com/apolloconfig/agollo/v4/storage"
-	"github.com/zeromicro/go-zero/core/logx"
 )
 
 type Config struct {
@@ -57,9 +56,9 @@ func NewClient(conf *Config) (*Client, error) {
 type CustomChangeListener struct{}
 
 func (c *CustomChangeListener) OnChange(event *storage.ChangeEvent) {
-	logx.Infof("Apollo Config Changed: %v\n", event.Changes)
+	// logx.Infof("Apollo Config Changed: %v\n", event.Changes)
 }
 
 func (c *CustomChangeListener) OnNewestChange(event *storage.FullChangeEvent) {
-	logx.Infof("Apollo Config Full Update: %v\n", event.Changes)
+	// logx.Infof("Apollo Config Full Update: %v\n", event.Changes)
 }
