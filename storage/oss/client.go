@@ -26,7 +26,7 @@ func NewClient(cfg types.Config) (*Client, error) {
 		WithRegion(cfg.Region)
 
 	client := oss.NewClient(config)
-	return &Client{ossClient: client, AppId: cfg.App, bucket: cfg.BucketName}, nil
+	return &Client{ossClient: client, AppId: cfg.App, bucket: cfg.Bucket}, nil
 }
 
 func (c *Client) UploadFile(ctx context.Context, remote, local string) error {

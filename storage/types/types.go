@@ -8,13 +8,13 @@ const (
 )
 
 type Config struct {
-	App        string
-	Provider   string
-	Endpoint   string
-	Region     string
-	AccessKey  string
-	SecretKey  string
-	BucketName Bucket
+	App       string
+	Provider  string
+	Endpoint  string
+	Region    string
+	AccessKey string
+	SecretKey string
+	Bucket    Bucket
 }
 
 type Bucket string

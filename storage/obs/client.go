@@ -22,7 +22,7 @@ func NewClient(cfg types.Config) (*Client, error) {
 		return nil, fmt.Errorf("Create obsClient error, errMsg: %s", err.Error())
 	}
 
-	return &Client{obsClient: obsClient, AppId: cfg.App, bucket: cfg.BucketName}, nil
+	return &Client{obsClient: obsClient, AppId: cfg.App, bucket: cfg.Bucket}, nil
 }
 
 func (c *Client) UploadFile(ctx context.Context, remote, local string) error {
