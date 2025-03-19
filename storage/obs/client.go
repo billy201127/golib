@@ -7,26 +7,27 @@ import (
 
 	huaweiObs "github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"github.com/zeromicro/go-zero/core/logc"
-	storagetypes "gomod.pri/golib/storage/types"
+	"gomod.pri/golib/storage/types"
 )
 
 type Client struct {
 	AppId     string
 	obsClient *huaweiObs.ObsClient
+	bucket    types.Bucket
 }
 
-func NewClient(ak, sk, endPoint string, appId string) (*Client, error) {
-	obsClient, err := huaweiObs.New(ak, sk, endPoint)
+func NewClient(cfg types.Config) (*Client, error) {
+	obsClient, err := huaweiObs.New(cfg.AccessKey, cfg.SecretKey, cfg.Endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("Create obsClient error, errMsg: %s", err.Error())
 	}
 
-	return &Client{obsClient: obsClient, AppId: appId}, nil
+	return &Client{obsClient: obsClient, AppId: cfg.App, bucket: cfg.BucketName}, nil
 }
 
-func (c *Client) UploadFile(ctx context.Context, bucket storagetypes.Bucket, remote, local string) error {
+func (c *Client) UploadFile(ctx context.Context, remote, local string) error {
 	input := &huaweiObs.PutFileInput{}
-	input.Bucket = string(bucket)
+	input.Bucket = string(c.bucket)
 	input.Key = fmt.Sprintf("%s/%s", c.AppId, remote)
 	input.SourceFile = local
 
@@ -38,9 +39,9 @@ func (c *Client) UploadFile(ctx context.Context, bucket storagetypes.Bucket, rem
 	return err
 }
 
-func (c *Client) UploadStream(ctx context.Context, bucket storagetypes.Bucket, remote string, stream io.Reader) error {
+func (c *Client) UploadStream(ctx context.Context, remote string, stream io.Reader) error {
 	input := &huaweiObs.PutObjectInput{}
-	input.Bucket = string(bucket)
+	input.Bucket = string(c.bucket)
 	input.Key = fmt.Sprintf("%s/%s", c.AppId, remote)
 	input.Body = stream
 
@@ -52,9 +53,9 @@ func (c *Client) UploadStream(ctx context.Context, bucket storagetypes.Bucket, r
 	return err
 }
 
-func (c *Client) DownloadFile(ctx context.Context, bucket storagetypes.Bucket, remote, local string) error {
+func (c *Client) DownloadFile(ctx context.Context, remote, local string) error {
 	input := &huaweiObs.DownloadFileInput{}
-	input.Bucket = string(bucket)
+	input.Bucket = string(c.bucket)
 	input.Key = fmt.Sprintf("%s/%s", c.AppId, remote)
 	input.DownloadFile = local
 
@@ -70,9 +71,9 @@ func (c *Client) DownloadFile(ctx context.Context, bucket storagetypes.Bucket, r
 	return err
 }
 
-func (c *Client) DownloadStream(ctx context.Context, bucket storagetypes.Bucket, remote string) (io.ReadCloser, error) {
+func (c *Client) DownloadStream(ctx context.Context, remote string) (io.ReadCloser, error) {
 	input := &huaweiObs.GetObjectInput{}
-	input.Bucket = string(bucket)
+	input.Bucket = string(c.bucket)
 	input.Key = fmt.Sprintf("%s/%s", c.AppId, remote)
 
 	output, err := c.obsClient.GetObject(input)
@@ -84,9 +85,9 @@ func (c *Client) DownloadStream(ctx context.Context, bucket storagetypes.Bucket,
 	return output.Body, err
 }
 
-func (c *Client) SignUrl(ctx context.Context, bucket storagetypes.Bucket, remote string, expires int) (string, error) {
+func (c *Client) SignUrl(ctx context.Context, remote string, expires int) (string, error) {
 	input := &huaweiObs.CreateSignedUrlInput{
-		Bucket:  string(bucket),
+		Bucket:  string(c.bucket),
 		Key:     fmt.Sprintf("%s/%s", c.AppId, remote),
 		Expires: expires,
 	}

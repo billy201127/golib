@@ -10,27 +10,28 @@ import (
 	aliOss "github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"github.com/zeromicro/go-zero/core/logc"
-	storagetypes "gomod.pri/golib/storage/types"
+	"gomod.pri/golib/storage/types"
 )
 
 type Client struct {
 	AppId     string
 	ossClient *aliOss.Client
+	bucket    types.Bucket
 }
 
-func NewClient(endpoint string, region string, appId string, ak, sk string) (*Client, error) {
-	cfg := oss.LoadDefaultConfig().
-		WithCredentialsProvider(credentials.NewStaticCredentialsProvider(ak, sk)).
-		WithEndpoint(endpoint).
-		WithRegion(region)
+func NewClient(cfg types.Config) (*Client, error) {
+	config := oss.LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey)).
+		WithEndpoint(cfg.Endpoint).
+		WithRegion(cfg.Region)
 
-	client := oss.NewClient(cfg)
-	return &Client{ossClient: client, AppId: appId}, nil
+	client := oss.NewClient(config)
+	return &Client{ossClient: client, AppId: cfg.App, bucket: cfg.BucketName}, nil
 }
 
-func (c *Client) UploadFile(ctx context.Context, bucket storagetypes.Bucket, remote, local string) error {
+func (c *Client) UploadFile(ctx context.Context, remote, local string) error {
 	_, err := c.ossClient.PutObjectFromFile(ctx, &oss.PutObjectRequest{
-		Bucket: oss.Ptr(string(bucket)),
+		Bucket: oss.Ptr(string(c.bucket)),
 		Key:    oss.Ptr(fmt.Sprintf("%s/%s", c.AppId, remote)),
 	}, local)
 	if err != nil {
@@ -40,9 +41,9 @@ func (c *Client) UploadFile(ctx context.Context, bucket storagetypes.Bucket, rem
 	return err
 }
 
-func (c *Client) UploadStream(ctx context.Context, bucket storagetypes.Bucket, remote string, stream io.Reader) error {
+func (c *Client) UploadStream(ctx context.Context, remote string, stream io.Reader) error {
 	request := &oss.PutObjectRequest{
-		Bucket: oss.Ptr(string(bucket)),
+		Bucket: oss.Ptr(string(c.bucket)),
 		Key:    oss.Ptr(fmt.Sprintf("%s/%s", c.AppId, remote)),
 		Body:   stream,
 	}
@@ -55,9 +56,9 @@ func (c *Client) UploadStream(ctx context.Context, bucket storagetypes.Bucket, r
 	return err
 }
 
-func (c *Client) DownloadFile(ctx context.Context, bucket storagetypes.Bucket, remote, local string) error {
+func (c *Client) DownloadFile(ctx context.Context, remote, local string) error {
 	_, err := c.ossClient.GetObjectToFile(ctx, &oss.GetObjectRequest{
-		Bucket: oss.Ptr(string(bucket)),
+		Bucket: oss.Ptr(string(c.bucket)),
 		Key:    oss.Ptr(fmt.Sprintf("%s/%s", c.AppId, remote)),
 	}, local)
 	if err != nil {
@@ -67,9 +68,9 @@ func (c *Client) DownloadFile(ctx context.Context, bucket storagetypes.Bucket, r
 	return err
 }
 
-func (c *Client) DownloadStream(ctx context.Context, bucket storagetypes.Bucket, remote string) (io.ReadCloser, error) {
+func (c *Client) DownloadStream(ctx context.Context, remote string) (io.ReadCloser, error) {
 	request := &oss.GetObjectRequest{
-		Bucket: oss.Ptr(string(bucket)),
+		Bucket: oss.Ptr(string(c.bucket)),
 		Key:    oss.Ptr(fmt.Sprintf("%s/%s", c.AppId, remote)),
 	}
 	result, err := c.ossClient.GetObject(ctx, request)
@@ -81,9 +82,9 @@ func (c *Client) DownloadStream(ctx context.Context, bucket storagetypes.Bucket,
 	return result.Body, err
 }
 
-func (c *Client) SignUrl(ctx context.Context, bucket storagetypes.Bucket, remote string, expires int) (string, error) {
+func (c *Client) SignUrl(ctx context.Context, remote string, expires int) (string, error) {
 	req, err := c.ossClient.Presign(ctx, &oss.GetObjectRequest{
-		Bucket: oss.Ptr(string(bucket)),
+		Bucket: oss.Ptr(string(c.bucket)),
 		Key:    oss.Ptr(fmt.Sprintf("%s/%s", c.AppId, remote)),
 	}, oss.PresignExpires(time.Second*time.Duration(expires)))
 	if err != nil {

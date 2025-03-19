@@ -12,13 +12,13 @@ import (
 )
 
 type Storage interface {
-	UploadFile(ctx context.Context, bucket types.Bucket, remote, local string) error
-	UploadStream(ctx context.Context, bucket types.Bucket, remote string, stream io.Reader) error
+	UploadFile(ctx context.Context, remote, local string) error
+	UploadStream(ctx context.Context, remote string, stream io.Reader) error
 
-	DownloadFile(ctx context.Context, bucket types.Bucket, remote, local string) error
-	DownloadStream(ctx context.Context, bucket types.Bucket, remote string) (io.ReadCloser, error)
+	DownloadFile(ctx context.Context, remote, local string) error
+	DownloadStream(ctx context.Context, remote string) (io.ReadCloser, error)
 
-	SignUrl(ctx context.Context, bucket types.Bucket, remote string, expires int) (string, error)
+	SignUrl(ctx context.Context, remote string, expires int) (string, error)
 }
 
 func NewStorage(appId string, cfg types.Config) (Storage, error) {
@@ -26,9 +26,9 @@ func NewStorage(appId string, cfg types.Config) (Storage, error) {
 
 	switch provider {
 	case types.StorageProviderOBS:
-		return obs.NewClient(cfg.AccessKey, cfg.SecretKey, cfg.Endpoint, appId)
+		return obs.NewClient(cfg)
 	case types.StorageProviderOSS:
-		return oss.NewClient(cfg.Endpoint, cfg.Region, appId, cfg.AccessKey, cfg.SecretKey)
+		return oss.NewClient(cfg)
 	default:
 		return nil, fmt.Errorf("Unsupported storage provider: %s", cfg.Provider)
 	}
