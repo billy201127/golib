@@ -17,9 +17,18 @@ const (
 )
 
 var ErrMsgs = map[int]string{
-	CodeInternalError:    "service internal error",
-	CodeInvalidParams:    "invalid request params",
-	CodeOperateTooFast:   "operation too fast",
-	CodeDataNotExist:     "data not exist",
-	CodeDataAlreadyExist: "data already exists",
+	// 4xx Client Errors
+	CodeInvalidParams:    "Bad Request - Invalid request parameters or syntax",
+	CodeUnauthorized:     "Unauthorized - Authentication required",
+	CodeForbidden:        "Forbidden - Access denied",
+	CodeDataNotExist:     "Not Found - The requested resource does not exist",
+	CodeDataAlreadyExist: "Conflict - Resource state conflict",
+	CodeOperateTooFast:   "Too Many Requests - Request rate limit exceeded",
+	CodeConvertFailed:    "Unprocessable Entity - Convert failed",
+
+	// 5xx Server Errors
+	CodeInternalError: "Internal Server Error - Something went wrong",
+	CodeCallFailed:    "Bad Gateway - Invalid response from upstream server",
+	CodeUnableConnect: "Service Unavailable - Server temporarily unavailable",
+	CodeDisabled:      "Gone - The requested resource is no longer available",
 }
