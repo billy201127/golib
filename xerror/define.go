@@ -14,6 +14,7 @@ const (
 	CodeDataAlreadyExist = http.StatusConflict
 	CodeOperateTooFast   = http.StatusTooManyRequests
 	CodeCallFailed       = http.StatusBadGateway
+	CodeDataNotFound     = 4004
 )
 
 var ErrMsgs = map[int]string{
@@ -31,4 +32,5 @@ var ErrMsgs = map[int]string{
 	CodeCallFailed:    "Bad Gateway - Invalid response from upstream server",
 	CodeUnableConnect: "Service Unavailable - Server temporarily unavailable",
 	CodeDisabled:      "Gone - The requested resource is no longer available",
+	CodeDataNotFound:  "Data Not Found - The requested resource does not exist",
 }

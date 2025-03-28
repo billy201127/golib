@@ -36,7 +36,7 @@ func NewErrRespWithCtx(ctx context.Context, err error) *Response[any] {
 		ce = typ
 	default:
 		if errors.Is(typ, sqlx.ErrNotFound) {
-			ce = xerror.New(4004, err)
+			ce = xerror.New(xerror.CodeDataNotFound, err)
 		} else {
 			ce = xerror.New(xerror.CodeInternalError, err)
 		}
