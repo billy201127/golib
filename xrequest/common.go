@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/zeromicro/go-zero/core/stores/sqlx"
 	"github.com/zeromicro/go-zero/core/trace"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -30,10 +31,15 @@ type Response[T any] struct {
 func NewErrRespWithCtx(ctx context.Context, err error) *Response[any] {
 	var ce *xerror.CodeError
 
-	if errors.As(err, &ce) {
-		ce = err.(*xerror.CodeError)
-	} else {
-		ce = xerror.New(xerror.CodeInternalError, err)
+	switch typ := err.(type) {
+	case *xerror.CodeError:
+		ce = typ
+	default:
+		if errors.Is(typ, sqlx.ErrNotFound) {
+			ce = xerror.New(4004, err)
+		} else {
+			ce = xerror.New(xerror.CodeInternalError, err)
+		}
 	}
 
 	resp := &Response[any]{
