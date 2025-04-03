@@ -11,23 +11,44 @@ import (
 	"github.com/zeromicro/go-zero/core/metric"
 )
 
-type CodeError struct {
-	Code      int
-	Msg       string
-	Err       error
-	CallStack string
+type Error struct {
+	code  int    // 错误码
+	msg   string // 用户可读的错误消息
+	cause error  // 原始错误（导致此错误的根本原因）
+	stack string // 可选的调用栈信息
 }
 
-func (c *CodeError) Error() string {
-	return fmt.Sprintf("code: %d, msg: %s, error: %v", c.Code, c.Msg, c.Err)
+// Code 返回错误码
+func (e *Error) Code() int {
+	return e.code
 }
 
-func (c *CodeError) GetCallStack() string {
-	var errorStr string
-	if c.CallStack != "" {
-		errorStr += fmt.Sprintf("\nerror stack: \n%s", c.CallStack)
+// Message 返回错误消息
+func (e *Error) Message() string {
+	return e.msg
+}
+
+// Cause 返回原始错误
+func (e *Error) Cause() error {
+	return e.cause
+}
+
+// Stack 返回调用栈信息
+func (e *Error) Stack() string {
+	return e.stack
+}
+
+// Error 实现 error 接口
+func (e *Error) Error() string {
+	if e.cause != nil {
+		return fmt.Sprintf("code: %d, msg: %s, cause: %v", e.code, e.msg, e.cause)
 	}
-	return errorStr
+	return fmt.Sprintf("code: %d, msg: %s", e.code, e.msg)
+}
+
+// Unwrap 实现错误链支持
+func (e *Error) Unwrap() error {
+	return e.cause
 }
 
 var errorMetric = metric.NewCounterVec(&metric.CounterVecOpts{
@@ -38,28 +59,28 @@ var errorMetric = metric.NewCounterVec(&metric.CounterVecOpts{
 	Labels:    []string{"code", "msg", "critical"},
 })
 
-func New(code int, err error, useErrMsg ...bool) *CodeError {
+func New(code int, err error, useErrMsg ...bool) *Error {
 	if err == nil {
 		err = errors.New("error not set")
 	}
 
-	ce := &CodeError{Code: code, Err: err}
+	ce := &Error{code: code, cause: err}
 
 	if len(useErrMsg) > 0 && useErrMsg[0] {
-		ce.Msg = err.Error()
+		ce.msg = err.Error()
 		return ce
 	}
 
 	if v, ok := ErrMsgs[code]; ok {
-		ce.Msg = v
+		ce.msg = v
 	} else {
-		ce.Msg = err.Error()
+		ce.msg = err.Error()
 	}
 
 	return ce
 }
 
-func RaiseCtx(ctx context.Context, code int, err error, args ...interface{}) *CodeError {
+func RaiseCtx(ctx context.Context, code int, err error, args ...interface{}) *Error {
 	ce := New(code, err)
 
 	if err != nil {
@@ -69,7 +90,7 @@ func RaiseCtx(ctx context.Context, code int, err error, args ...interface{}) *Co
 	return ce
 }
 
-func Raise(code int, err error, args ...interface{}) *CodeError {
+func Raise(code int, err error, args ...interface{}) *Error {
 	ce := New(code, err)
 
 	if err != nil {
@@ -79,9 +100,9 @@ func Raise(code int, err error, args ...interface{}) *CodeError {
 	return ce
 }
 
-func NewWithStack(code int, err error) *CodeError {
+func NewWithStack(code int, err error) *Error {
 	ce := New(code, err)
-	ce.CallStack = getStack(3)
+	ce.stack = getStack(3)
 	return ce
 }
 

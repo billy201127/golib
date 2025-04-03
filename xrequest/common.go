@@ -29,10 +29,10 @@ type Response[T any] struct {
 }
 
 func NewErrRespWithCtx(ctx context.Context, err error) *Response[any] {
-	var ce *xerror.CodeError
+	var ce *xerror.Error
 
 	switch typ := err.(type) {
-	case *xerror.CodeError:
+	case *xerror.Error:
 		ce = typ
 	default:
 		if errors.Is(typ, sqlx.ErrNotFound) {
@@ -43,29 +43,29 @@ func NewErrRespWithCtx(ctx context.Context, err error) *Response[any] {
 	}
 
 	resp := &Response[any]{
-		Code:    ce.Code,
-		Message: ce.Msg,
+		Code:    ce.Code(),
+		Message: ce.Message(),
 		TraceId: xtrace.TraceID(ctx),
 	}
 
-	if ce.Err != nil {
-		resp.ErrMsg = ce.Err.Error()
+	if ce.Cause() != nil {
+		resp.ErrMsg = ce.Cause().Error()
 	}
 
 	return resp
 }
 
 func NewErrLoginFailResp(err error) *Response[any] {
-	var ce *xerror.CodeError
+	var ce *xerror.Error
 	ce = xerror.New(xerror.CodeUnauthorized, err)
 
 	resp := &Response[any]{
-		Code:    ce.Code,
-		Message: ce.Msg,
+		Code:    ce.Code(),
+		Message: ce.Message(),
 	}
 
-	if ce.Err != nil {
-		resp.ErrMsg = ce.Err.Error()
+	if ce.Cause() != nil {
+		resp.ErrMsg = ce.Cause().Error()
 	}
 
 	return resp
