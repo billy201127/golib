@@ -3,6 +3,7 @@ package xerror
 import "net/http"
 
 const (
+	CodeSuccess          = http.StatusOK
 	CodeInternalError    = http.StatusInternalServerError
 	CodeUnableConnect    = http.StatusServiceUnavailable
 	CodeForbidden        = http.StatusForbidden
