@@ -18,6 +18,25 @@ type Error struct {
 	stack string // 可选的调用栈信息
 }
 
+func (e *Error) SetCode(code int) *Error {
+	e.code = code
+	return e
+}
+func (e *Error) SetMsg(msg string) *Error {
+	e.msg = msg
+	return e
+}
+
+func (e *Error) SetCause(cause error) *Error {
+	e.cause = cause
+	return e
+}
+
+func (e *Error) SetStack(stack string) *Error {
+	e.stack = stack
+	return e
+}
+
 // Code 返回错误码
 func (e *Error) Code() int {
 	return e.code
