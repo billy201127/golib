@@ -14,11 +14,20 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func NewProducer(appId string, endpoint string) *Producer {
+type ProducerConfig struct {
+	Endpoint           string
+	AppId              string
+	SessionCredentials *SessionCredentials
+}
+
+func NewProducer(conf *ProducerConfig) *Producer {
 	SetLogger()
 	producer, err := rmq.NewProducer(&rmq.Config{
-		Endpoint:    endpoint,
-		Credentials: &credentials.SessionCredentials{},
+		Endpoint: conf.Endpoint,
+		Credentials: &credentials.SessionCredentials{
+			AccessKey:    conf.SessionCredentials.AccessKey,
+			AccessSecret: conf.SessionCredentials.AccessSecret,
+		},
 	})
 	if err != nil {
 		logx.Errorf("init producer failed: %v", err)
@@ -33,7 +42,7 @@ func NewProducer(appId string, endpoint string) *Producer {
 
 	return &Producer{
 		Producer: producer,
-		appId:    appId,
+		appId:    conf.AppId,
 	}
 }
 

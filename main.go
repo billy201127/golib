@@ -9,6 +9,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+
 	// "go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -61,8 +62,14 @@ func main() {
 		msgSpan.SpanContext().SpanID().String(),
 	)
 
-	producer := rocketmq.NewProducer("KC", "127.0.0.1:8081")
-
+	producer := rocketmq.NewProducer(&rocketmq.ProducerConfig{
+		Endpoint: "127.0.0.1:8081",
+		AppId:    "KC",
+		SessionCredentials: &rocketmq.SessionCredentials{
+			AccessKey:    "KC",
+			AccessSecret: "KC",
+		},
+	})
 	producer.Start()
 
 	msg := Message{
