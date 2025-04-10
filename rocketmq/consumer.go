@@ -29,11 +29,11 @@ var (
 )
 
 type ConsumerConfig struct {
-	Endpoint      string
-	Topic         string
-	ConsumerGroup string
-	Tags          []string            `json:",optional"`
-	Credentials   *SessionCredentials `json:",optional"`
+	Endpoint      string              `json:"endpoint"`
+	Topic         string              `json:"topic"`
+	ConsumerGroup string              `json:"consumerGroup"`
+	Tags          []string            `json:"tags,optional"`
+	Credentials   *SessionCredentials `json:"credentials,optional"`
 }
 type SessionCredentials struct {
 	AccessKey    string `json:"accessKey"`

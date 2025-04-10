@@ -9,7 +9,7 @@ func TestProducer_Publish(t *testing.T) {
 	producer := NewProducer(&ProducerConfig{
 		Endpoint: "127.0.0.1:8081",
 		AppId:    "KC",
-		SessionCredentials: &SessionCredentials{
+		Credentials: &SessionCredentials{
 			AccessKey:    "KC",
 			AccessSecret: "KC",
 		},

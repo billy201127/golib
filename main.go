@@ -65,7 +65,7 @@ func main() {
 	producer := rocketmq.NewProducer(&rocketmq.ProducerConfig{
 		Endpoint: "127.0.0.1:8081",
 		AppId:    "KC",
-		SessionCredentials: &rocketmq.SessionCredentials{
+		Credentials: &rocketmq.SessionCredentials{
 			AccessKey:    "KC",
 			AccessSecret: "KC",
 		},

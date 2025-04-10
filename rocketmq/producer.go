@@ -15,9 +15,9 @@ import (
 )
 
 type ProducerConfig struct {
-	Endpoint           string
-	AppId              string
-	SessionCredentials *SessionCredentials
+	Endpoint    string              `json:"endpoint"`
+	AppId       string              `json:"appId"`
+	Credentials *SessionCredentials `json:"credentials"`
 }
 
 func NewProducer(conf *ProducerConfig) *Producer {
@@ -25,8 +25,8 @@ func NewProducer(conf *ProducerConfig) *Producer {
 	producer, err := rmq.NewProducer(&rmq.Config{
 		Endpoint: conf.Endpoint,
 		Credentials: &credentials.SessionCredentials{
-			AccessKey:    conf.SessionCredentials.AccessKey,
-			AccessSecret: conf.SessionCredentials.AccessSecret,
+			AccessKey:    conf.Credentials.AccessKey,
+			AccessSecret: conf.Credentials.AccessSecret,
 		},
 	})
 	if err != nil {
