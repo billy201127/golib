@@ -34,6 +34,8 @@ func Init(c *Config) redis.UniversalClient {
 	// because redis use the same, so all keys add the app prefix
 	Cli.AddHook(AppPrefixHook{Prefix: c.Prefix})
 
+	Cli.AddHook(TracingHook{})
+
 	// Add context with timeout for ping
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
