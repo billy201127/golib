@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"time"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
@@ -91,5 +92,9 @@ func (c *Client) SignUrl(ctx context.Context, remote string, expires int) (strin
 		logc.Errorf(ctx, "Sign url error, errMsg: %s", err.Error())
 	}
 
-	return req.URL, nil
+	if req.URL == "" {
+		return "", fmt.Errorf("Signed url is empty")
+	}
+
+	return url.QueryEscape(req.URL), nil
 }
