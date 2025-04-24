@@ -4,6 +4,10 @@ import "fmt"
 
 type Topic string
 
-func GetTopicName(appName string, topic Topic) string {
-	return fmt.Sprintf("%s_%s", appName, string(topic))
+func GetTopicName(prefix string, topic Topic) string {
+	if prefix == "" {
+		return string(topic)
+	}
+
+	return fmt.Sprintf("%s_%s", prefix, string(topic))
 }
