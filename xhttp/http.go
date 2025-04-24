@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -58,9 +59,17 @@ func WithHTTPClient(client *http.Client) ClientOption {
 	}
 }
 
+// WithLogHandler 设置日志处理函数
+func WithLog(logHandler func(log *RequestResponseLog)) ClientOption {
+	return func(c *Client) {
+		c.logHandler = logHandler
+	}
+}
+
 // Client HTTP客户端封装
 type Client struct {
-	client *http.Client
+	client     *http.Client
+	logHandler func(log *RequestResponseLog)
 }
 
 // NewClient 创建新的HTTP客户端
@@ -135,8 +144,53 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 		req.Header.Set(k, v)
 	}
 
+	// 记录请求信息
+	log := &RequestResponseLog{
+		URL:     url,
+		Method:  method,
+		Headers: header,
+		Request: body,
+		CTime:   time.Now().UnixMilli(),
+	}
+
+	// 读取响应体并记录日志
+	var (
+		respBody []byte
+		resp     *http.Response
+	)
+
+	start := time.Now()
+	defer func() {
+		if resp != nil {
+			// 记录响应信息
+			log.Status = resp.StatusCode
+			log.Response = respBody
+			log.TimeCost = time.Since(start).Milliseconds()
+			if err != nil {
+				if log.Extend == nil {
+					log.Extend = &LogExtend{}
+				}
+				log.Extend.Expand = err.Error()
+			}
+
+			// 如果设置了日志处理函数，则推送日志
+			if c.logHandler != nil {
+				// 直接执行，避免阻塞主流程
+				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							fmt.Println("logHandler panic:", r)
+						}
+					}()
+
+					c.logHandler(log)
+				}()
+			}
+		}
+	}()
+
 	// 执行请求
-	resp, err := c.client.Do(req)
+	resp, err = c.client.Do(req)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -146,6 +200,17 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 	// 设置追踪属性
 	span.SetAttributes(semconv.HTTPAttributesFromHTTPStatusCode(resp.StatusCode)...)
 	span.SetStatus(semconv.SpanStatusFromHTTPStatusCodeAndSpanKind(resp.StatusCode, oteltrace.SpanKindClient))
+
+	// 读取响应体
+	respBody, err = io.ReadAll(resp.Body)
+	if err != nil {
+		// 关闭响应体
+		resp.Body.Close()
+		return nil, fmt.Errorf("read response body failed: %w", err)
+	}
+
+	// 重新设置响应体，因为已经被读取
+	resp.Body = io.NopCloser(bytes.NewReader(respBody))
 
 	if resp.StatusCode >= 400 {
 		err = fmt.Errorf("http status %d", resp.StatusCode)
