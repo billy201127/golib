@@ -59,7 +59,6 @@ type PublishOption struct {
 	delay       time.Duration
 	timeout     time.Duration
 	ShardingKey string
-	prefix      string
 }
 
 type PublishOptionFunc func(*PublishOption)
@@ -83,23 +82,16 @@ func WithShardingKey(shardingKey string) PublishOptionFunc {
 	}
 }
 
-func WithPrefix(prefix string) PublishOptionFunc {
-	return func(opt *PublishOption) {
-		opt.prefix = prefix
-	}
-}
-
 func (p *Producer) PublishWithoutPrefix(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
-	opts = append(opts, WithPrefix(""))
-	return p.Publish(ctx, topic, msg, opts...)
+	return p.publish(ctx, topic, msg, opts...)
 }
 
 func (p *Producer) PublishWithAppPrefix(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
-	opts = append(opts, WithPrefix(p.app))
-	return p.Publish(ctx, topic, msg, opts...)
+	actualTopic := GetTopicName(p.app, topic)
+	return p.publish(ctx, Topic(actualTopic), msg, opts...)
 }
 
-func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
+func (p *Producer) publish(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
 	opt := &PublishOption{
 		timeout: 5 * time.Second,
 	}
@@ -108,7 +100,7 @@ func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ..
 		o(opt)
 	}
 
-	actualTopic := GetTopicName(opt.prefix, topic)
+	actualTopic := string(topic)
 
 	// 检查输入的 context 中是否已有 trace
 	// if spanCtx := trace.SpanContextFromContext(ctx); spanCtx.IsValid() {

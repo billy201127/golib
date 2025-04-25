@@ -14,7 +14,7 @@ func TestProducer_Publish(t *testing.T) {
 			AccessSecret: "KC",
 		},
 	})
-	err := producer.Publish(context.Background(), Topic("test"), []byte("test"))
+	err := producer.PublishWithAppPrefix(context.Background(), Topic("test"), []byte("test"))
 	if err != nil {
 		t.Fatalf("publish message failed: %v", err)
 	}
