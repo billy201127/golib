@@ -86,7 +86,7 @@ func (p *Producer) PublishWithoutPrefix(ctx context.Context, topic Topic, msg []
 	return p.publish(ctx, topic, msg, opts...)
 }
 
-func (p *Producer) PublishWithAppPrefix(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
+func (p *Producer) PublishWithPrefix(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
 	actualTopic := GetTopicName(p.app, topic)
 	return p.publish(ctx, Topic(actualTopic), msg, opts...)
 }
