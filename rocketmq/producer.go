@@ -42,13 +42,11 @@ func NewProducer(conf *ProducerConfig) *Producer {
 
 	return &Producer{
 		Producer: producer,
-		appId:    conf.AppId,
 	}
 }
 
 type Producer struct {
 	rmq.Producer
-	appId string
 }
 
 func (p *Producer) Stop() {
@@ -59,6 +57,7 @@ type PublishOption struct {
 	delay       time.Duration
 	timeout     time.Duration
 	ShardingKey string
+	prefix      string
 }
 
 type PublishOptionFunc func(*PublishOption)
@@ -82,9 +81,24 @@ func WithShardingKey(shardingKey string) PublishOptionFunc {
 	}
 }
 
-func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
-	actualTopic := GetTopicName(string(p.appId), topic)
+func WithPrefix(prefix string) PublishOptionFunc {
+	return func(opt *PublishOption) {
+		opt.prefix = prefix
+	}
+}
 
+func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
+	actualTopic := string(topic)
+
+	opt := &PublishOption{
+		timeout: 5 * time.Second,
+	}
+	for _, o := range opts {
+		o(opt)
+	}
+	if opt.prefix != "" {
+		actualTopic = GetTopicWithPrefix(opt.prefix, topic)
+	}
 	// 检查输入的 context 中是否已有 trace
 	// if spanCtx := trace.SpanContextFromContext(ctx); spanCtx.IsValid() {
 	// 	logx.Infof("Input context trace_id: %s", spanCtx.TraceID().String())
@@ -120,13 +134,6 @@ func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ..
 	// 为了兼容性，同时保留原有的 trace_id 和 span_id
 	message.AddProperty("trace_id", span.SpanContext().TraceID().String())
 	message.AddProperty("span_id", span.SpanContext().SpanID().String())
-
-	opt := &PublishOption{
-		timeout: 5 * time.Second,
-	}
-	for _, o := range opts {
-		o(opt)
-	}
 
 	if opt.ShardingKey != "" {
 		message.SetKeys(opt.ShardingKey)
