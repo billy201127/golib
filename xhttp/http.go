@@ -188,7 +188,7 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 				go func() {
 					defer func() {
 						if r := recover(); r != nil {
-							c.logger.Errorf("logHandler panic: %v", debug.Stack())
+							c.logger.Errorf("logHandler panic: %v, stack: %s", r, string(debug.Stack()))
 						}
 					}()
 
