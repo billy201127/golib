@@ -42,11 +42,13 @@ func NewProducer(conf *ProducerConfig) *Producer {
 
 	return &Producer{
 		Producer: producer,
+		app:      conf.AppId,
 	}
 }
 
 type Producer struct {
 	rmq.Producer
+	app string
 }
 
 func (p *Producer) Stop() {
@@ -87,18 +89,27 @@ func WithPrefix(prefix string) PublishOptionFunc {
 	}
 }
 
-func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
-	actualTopic := string(topic)
+func (p *Producer) PublishWithoutPrefix(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
+	opts = append(opts, WithPrefix(""))
+	return p.Publish(ctx, topic, msg, opts...)
+}
 
+func (p *Producer) PublishWithAppPrefix(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
+	opts = append(opts, WithPrefix(p.app))
+	return p.Publish(ctx, topic, msg, opts...)
+}
+
+func (p *Producer) Publish(ctx context.Context, topic Topic, msg []byte, opts ...PublishOptionFunc) error {
 	opt := &PublishOption{
 		timeout: 5 * time.Second,
 	}
+
 	for _, o := range opts {
 		o(opt)
 	}
-	if opt.prefix != "" {
-		actualTopic = GetTopicWithPrefix(opt.prefix, topic)
-	}
+
+	actualTopic := GetTopicName(opt.prefix, topic)
+
 	// 检查输入的 context 中是否已有 trace
 	// if spanCtx := trace.SpanContextFromContext(ctx); spanCtx.IsValid() {
 	// 	logx.Infof("Input context trace_id: %s", spanCtx.TraceID().String())

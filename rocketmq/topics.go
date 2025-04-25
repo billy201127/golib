@@ -4,7 +4,7 @@ import "fmt"
 
 type Topic string
 
-func GetTopicWithPrefix(prefix string, topic Topic) string {
+func GetTopicName(prefix string, topic Topic) string {
 	if prefix == "" {
 		return string(topic)
 	}
