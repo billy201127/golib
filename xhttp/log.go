@@ -1,6 +1,26 @@
 package xhttp
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type Logger interface {
+	Infof(string, ...any)
+	Errorf(string, ...any)
+}
+
+var DefaultLogger Logger = &defaultLogger{}
+
+type defaultLogger struct{}
+
+func (l *defaultLogger) Infof(format string, v ...any) {
+	fmt.Printf(format, v...)
+}
+
+func (l *defaultLogger) Errorf(format string, v ...any) {
+	fmt.Printf(format, v...)
+}
 
 // RequestResponseLog 请求响应日志
 type RequestResponseLog struct {

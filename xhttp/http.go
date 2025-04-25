@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/trace"
@@ -59,8 +60,14 @@ func WithHTTPClient(client *http.Client) ClientOption {
 	}
 }
 
+func WithLogger(logger Logger) ClientOption {
+	return func(c *Client) {
+		c.logger = logger
+	}
+}
+
 // WithLogHandler 设置日志处理函数
-func WithLog(logHandler func(log *RequestResponseLog)) ClientOption {
+func WithLogHandler(logHandler func(log *RequestResponseLog)) ClientOption {
 	return func(c *Client) {
 		c.logHandler = logHandler
 	}
@@ -70,6 +77,7 @@ func WithLog(logHandler func(log *RequestResponseLog)) ClientOption {
 type Client struct {
 	client     *http.Client
 	logHandler func(log *RequestResponseLog)
+	logger     Logger
 }
 
 // NewClient 创建新的HTTP客户端
@@ -79,6 +87,7 @@ func NewClient(opts ...ClientOption) *Client {
 			Transport: DefaultTransport,
 			Timeout:   30 * time.Second, // 默认30秒超时
 		},
+		logger: DefaultLogger,
 	}
 
 	// 应用选项
@@ -179,7 +188,7 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 				go func() {
 					defer func() {
 						if r := recover(); r != nil {
-							fmt.Println("logHandler panic:", r)
+							c.logger.Errorf("logHandler panic: %v", debug.Stack())
 						}
 					}()
 
