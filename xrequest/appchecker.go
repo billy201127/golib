@@ -28,12 +28,17 @@ func GetApp(ctx context.Context, req interface{}) (string, error) {
 		return "", errors.New("request struct is not a struct")
 	}
 
-	// Try to get App field
+	// Try to get App field first
 	f := v.FieldByName("App")
-	if !f.IsValid() {
-		return "", errors.New("app field does not exist in request struct")
+	if f.IsValid() {
+		return fmt.Sprint(f.Interface()), nil
 	}
 
-	// Convert field value to string
-	return fmt.Sprint(f.Interface()), nil
+	// If App field doesn't exist, try to get AppId field
+	f = v.FieldByName("AppId")
+	if f.IsValid() {
+		return fmt.Sprint(f.Interface()), nil
+	}
+
+	return "", errors.New("neither App nor AppId field exists in request struct")
 }
