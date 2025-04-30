@@ -34,18 +34,45 @@ func NewFeishuNotification(cfg Config) (Notification, error) {
 }
 
 // SendText 发送文本消息
-func (f *FeishuNotification) SendText(ctx context.Context, content string, isAtAll bool, atMobiles []string) error {
-	// 飞书不支持直接 @ 手机号，只支持 @ 所有人
-	return SendFeishuTextMsg(ctx, f.webhook, f.secret, content, isAtAll)
+func (f *FeishuNotification) SendText(ctx context.Context, content string, opts ...Option) error {
+	optsStruct := &Options{}
+	for _, opt := range opts {
+		opt(optsStruct)
+	}
+
+	// 处理@用户
+	for _, user := range optsStruct.AtUsers {
+		if user == "all" {
+			content += `<at user_id="all">Everyone</at>`
+		} else {
+			content += fmt.Sprintf(`<at user_id="%s">%s</at>`, user, user)
+		}
+	}
+
+	return SendFeishuTextMsg(ctx, f.webhook, f.secret, content)
 }
 
 // SendCard 发送卡片消息
-func (f *FeishuNotification) SendCard(ctx context.Context, title, content string, isAtAll bool) error {
-	return SendFeishuCardMsg(ctx, f.webhook, f.secret, title, content, isAtAll)
+func (f *FeishuNotification) SendCard(ctx context.Context, title, content string, opts ...Option) error {
+	optsStruct := &Options{}
+	for _, opt := range opts {
+		opt(optsStruct)
+	}
+
+	// 处理@用户
+	for _, user := range optsStruct.AtUsers {
+		if user == "all" {
+			content += `<at user_id="all">Everyone</at>`
+		} else {
+			content += fmt.Sprintf(`<at user_id="%s">%s</at>`, user, user)
+		}
+	}
+
+	return SendFeishuCardMsg(ctx, f.webhook, f.secret, title, content)
 }
 
 // 发送飞书文本消息
-func SendFeishuTextMsg(ctx context.Context, webhook, secret, content string, isAtAll bool) error {
+func SendFeishuTextMsg(ctx context.Context, webhook, secret, content string) error {
 	if webhook == "" || secret == "" {
 		return nil
 	}
@@ -54,9 +81,6 @@ func SendFeishuTextMsg(ctx context.Context, webhook, secret, content string, isA
 	info := reqStruct{}
 	info.MsgType = "text"
 	info.Content.Text = content
-	if isAtAll {
-		info.Content.Text += `<at user_id="all">Everyone</at>`
-	}
 	info.Timestamp = strconv.FormatInt(tt, 10)
 	info.Sign = secretStr
 	dataB, _ := json.Marshal(info)
@@ -86,7 +110,7 @@ func GenFeishuSign(ctx context.Context, secret string, timestamp int64) (string,
 }
 
 // 发送飞书卡片消息
-func SendFeishuCardMsg(ctx context.Context, webhook, secret, title, content string, isAtAll bool) error {
+func SendFeishuCardMsg(ctx context.Context, webhook, secret, title, content string) error {
 	if webhook == "" || secret == "" {
 		return fmt.Errorf("invalid config")
 	}
@@ -105,10 +129,6 @@ func SendFeishuCardMsg(ctx context.Context, webhook, secret, title, content stri
 	msg.Card.Header.Title.Tag = "plain_text"
 	msg.Card.Header.Title.Content = title
 	msg.Card.Header.Template = "blue"
-	if isAtAll {
-		msg.Card.Header.Template = "red"
-		content += `<at id=all>Everyone</at>`
-	}
 
 	hostname, _ := os.Hostname()
 	content = fmt.Sprintf("Hostname: [%s]\n%s\n", hostname, content)

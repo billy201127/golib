@@ -29,9 +29,31 @@ type Config struct {
 // Notification 通知接口
 type Notification interface {
 	// SendText 发送文本消息
-	SendText(ctx context.Context, content string, isAtAll bool, atMobiles []string) error
+	SendText(ctx context.Context, content string, opts ...Option) error
 	// SendCard 发送卡片消息
-	SendCard(ctx context.Context, title, content string, isAtAll bool) error
+	SendCard(ctx context.Context, title, content string, opts ...Option) error
+}
+
+// Option 选项
+type Option func(*Options)
+
+// Options 选项结构
+type Options struct {
+	AtUsers []string // 空数组表示不@任何人，["all"]表示@所有人，["user1", "user2"]表示@特定用户
+}
+
+// AtAll 设置@所有人
+func AtAll() Option {
+	return func(o *Options) {
+		o.AtUsers = []string{"all"}
+	}
+}
+
+// AtMobiles 设置@指定手机号
+func AtMobiles(atMobiles []string) Option {
+	return func(o *Options) {
+		o.AtUsers = atMobiles
+	}
 }
 
 // NewNotification 创建通知实例

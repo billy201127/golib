@@ -13,8 +13,8 @@ func Example() {
 	dingTalkConfig := NotificationConfig{
 		Type: DingTalk,
 		Config: Config{
-			Webhook: "",
-			Secret:  "",
+			Webhook: "https://oapi.dingtalk.com/robot/send?access_token=bbaa664f05f10a0d6c6f14022209a31f91caf26d0a7a3768c8b86b0b70855551",
+			Secret:  "SEC1fc4f39463764053f1c5476566da6dadd57b81fe4a4c973a99cf1b54a933dbaa",
 		},
 	}
 	dingTalkNotifier, err := NewNotification(dingTalkConfig)
@@ -23,16 +23,16 @@ func Example() {
 	}
 
 	// 发送钉钉文本消息
-	err = dingTalkNotifier.SendText(ctx, "这是一条钉钉测试消息", false, []string{""})
+	err = dingTalkNotifier.SendText(ctx, "这是一条钉钉测试消息")
 	if err != nil {
 		log.Printf("Failed to send dingtalk text message: %v", err)
 	}
 
 	// 发送钉钉卡片消息
-	err = dingTalkNotifier.SendCard(ctx, "钉钉卡片标题", "这是一条钉钉卡片消息内容\ntest\n", true)
-	if err != nil {
-		log.Printf("Failed to send dingtalk card message: %v", err)
-	}
+	// err = dingTalkNotifier.SendCard(ctx, "钉钉卡片标题", "这是一条钉钉卡片消息内容\ntest\n", AtAll())
+	// if err != nil {
+	// 	log.Printf("Failed to send dingtalk card message: %v", err)
+	// }
 
 	// // 创建飞书通知
 	// feishuConfig := NotificationConfig{

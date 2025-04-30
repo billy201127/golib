@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -32,12 +33,42 @@ func NewDingTalkNotification(cfg Config) (Notification, error) {
 }
 
 // SendText 发送文本消息
-func (d *DingTalkNotification) SendText(ctx context.Context, content string, isAtAll bool, atMobiles []string) error {
+func (d *DingTalkNotification) SendText(ctx context.Context, content string, opts ...Option) error {
+	optsStruct := &Options{}
+	for _, opt := range opts {
+		opt(optsStruct)
+	}
+
+	// 处理@用户
+	isAtAll := false
+	var atMobiles []string
+	for _, user := range optsStruct.AtUsers {
+		if user == "all" {
+			isAtAll = true
+		} else {
+			atMobiles = append(atMobiles, user)
+		}
+	}
+
 	return d.sendDingTalkTextMsg(ctx, content, atMobiles, isAtAll)
 }
 
 // SendCard 发送卡片消息
-func (d *DingTalkNotification) SendCard(ctx context.Context, title, content string, isAtAll bool) error {
+func (d *DingTalkNotification) SendCard(ctx context.Context, title, content string, opts ...Option) error {
+	optsStruct := &Options{}
+	for _, opt := range opts {
+		opt(optsStruct)
+	}
+
+	// 处理@用户
+	isAtAll := false
+	for _, user := range optsStruct.AtUsers {
+		if user == "all" {
+			isAtAll = true
+			break
+		}
+	}
+
 	return d.sendDingTalkMarkdownMsg(ctx, title, content, isAtAll)
 }
 
@@ -53,6 +84,9 @@ func (d *DingTalkNotification) GenDingTalkSign() (string, int64) {
 
 // 发送text格式钉钉消息
 func (d *DingTalkNotification) sendDingTalkTextMsg(ctx context.Context, content string, mobiles []string, isAtAll bool) (err error) {
+	hostname, _ := os.Hostname()
+	content = fmt.Sprintf("hostname: [ %s ]\n%s", hostname, content)
+
 	msg := &Dtext{}
 	msg.Msgtype = "text"
 	msg.Text.Content = content
