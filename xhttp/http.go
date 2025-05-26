@@ -182,6 +182,8 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 				log.Extend.Expand = err.Error()
 			}
 
+			c.logger.Infof("call third log: %+v", log)
+
 			// 如果设置了日志处理函数，则推送日志
 			if c.logHandler != nil {
 				// 直接执行，避免阻塞主流程
