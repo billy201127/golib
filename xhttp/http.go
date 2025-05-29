@@ -182,7 +182,8 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 				log.Extend.Expand = err.Error()
 			}
 
-			c.logger.Infof("call third log: %+v", log)
+			logJSON, _ := log.ToJSON()
+			c.logger.Infof("call third log: %s", string(logJSON))
 
 			// 如果设置了日志处理函数，则推送日志
 			if c.logHandler != nil {
