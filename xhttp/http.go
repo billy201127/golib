@@ -182,11 +182,10 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 				log.Extend.Expand = err.Error()
 			}
 
-			logJSON, _ := log.ToJSON()
-			c.logger.Infof("call third log: %s", string(logJSON))
-
 			// 如果设置了日志处理函数，则推送日志
 			if c.logHandler != nil {
+				logJSON, _ := log.ToJSON()
+				c.logger.Infof("call third log: %s", string(logJSON))
 				// 直接执行，避免阻塞主流程
 				go func() {
 					defer func() {
