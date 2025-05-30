@@ -78,7 +78,6 @@ func (c *Client) DownloadStream(ctx context.Context, remote string) (io.ReadClos
 	if err != nil {
 		logc.Errorf(ctx, "Download stream error, errMsg: %s", err.Error())
 	}
-	defer result.Body.Close()
 
 	return result.Body, err
 }
