@@ -8,6 +8,7 @@ import (
 
 	"gomod.pri/golib/storage/obs"
 	"gomod.pri/golib/storage/oss"
+	"gomod.pri/golib/storage/s3"
 	"gomod.pri/golib/storage/types"
 )
 
@@ -29,6 +30,8 @@ func NewStorage(appId string, cfg types.Config) (Storage, error) {
 		return obs.NewClient(cfg)
 	case types.StorageProviderOSS:
 		return oss.NewClient(cfg)
+	case types.StorageProviderS3:
+		return s3.NewClient(cfg)
 	default:
 		return nil, fmt.Errorf("Unsupported storage provider: %s", cfg.Provider)
 	}

@@ -5,6 +5,7 @@ type StorageProvider string
 const (
 	StorageProviderOBS StorageProvider = "obs"
 	StorageProviderOSS StorageProvider = "oss"
+	StorageProviderS3  StorageProvider = "s3"
 )
 
 type Config struct {
