@@ -23,6 +23,7 @@ func NewClient(cfg types.Config) (*Client, error) {
 	// load aws config
 	awsCfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(cfg.Region),
+		config.WithBaseEndpoint(cfg.Endpoint),
 		config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
 			return aws.Credentials{
 				AccessKeyID:     cfg.AccessKey,
@@ -37,9 +38,6 @@ func NewClient(cfg types.Config) (*Client, error) {
 	// create s3 client
 	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = true // use path style for s3, default is virtual hosted-style
-		if cfg.Endpoint != "" {
-			o.BaseEndpoint = aws.String(cfg.Endpoint)
-		}
 	})
 
 	return &Client{
