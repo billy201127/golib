@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -149,68 +150,65 @@ func (c *Consumer[T]) consume() {
 			}
 
 			for _, msg := range msgs {
-				props := msg.GetProperties()
-				// 打印接收到的消息属性
-				// logx.Infof("Received message properties: %+v", props)
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							stack := string(debug.Stack())
+							logx.Errorf("panic in message processing: %v\nstack: %s", r, stack)
+							// 确保消息被确认，避免重复消费
+							if ackErr := c.consumer.Ack(context.Background(), msg); ackErr != nil {
+								logx.Errorf("failed to ack message after panic: %v", ackErr)
+							}
+						}
+					}()
 
-				carrier := propagation.MapCarrier{}
-				for k, v := range props {
-					carrier[k] = v
-				}
-
-				ctx := context.Background()
-				ctx = prop.Extract(ctx, carrier)
-
-				// 检查是否成功提取了 trace context
-				// if spanCtx := trace.SpanContextFromContext(ctx); spanCtx.IsValid() {
-				// 	logx.Infof("Extracted trace_id: %s", spanCtx.TraceID().String())
-				// } else {
-				// 	logx.Info("No valid trace context extracted")
-				// }
-
-				msgCtx, msgSpan := tracer.Start(ctx, "rocket.Consumer.ProcessMessage",
-					trace.WithAttributes(
-						attribute.String("message.topic", msg.GetTopic()),
-						attribute.String("message.id", msg.GetMessageId()),
-					),
-					trace.WithSpanKind(trace.SpanKindConsumer),
-				)
-
-				// 打印新创建的 span 的 trace context
-				// logx.Infof("New span trace_id: %s", msgSpan.SpanContext().TraceID().String())
-
-				var data T
-				if err = json.Unmarshal(msg.GetBody(), &data); err != nil {
-					c.handler.ErrorHandler(msgCtx, data, err)
-					msgSpan.RecordError(err)
-					msgSpan.SetStatus(codes.Error, err.Error())
-					if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
-						msgSpan.RecordError(ackErr)
+					props := msg.GetProperties()
+					carrier := propagation.MapCarrier{}
+					for k, v := range props {
+						carrier[k] = v
 					}
-					msgSpan.End()
-					continue
-				}
 
-				if err = c.handler.Consume(msgCtx, data); err != nil {
-					c.handler.ErrorHandler(msgCtx, data, err)
-					msgSpan.RecordError(err)
-					msgSpan.SetStatus(codes.Error, err.Error())
-					if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
-						msgSpan.RecordError(ackErr)
+					ctx := context.Background()
+					ctx = prop.Extract(ctx, carrier)
+
+					msgCtx, msgSpan := tracer.Start(ctx, "rocket.Consumer.ProcessMessage",
+						trace.WithAttributes(
+							attribute.String("message.topic", msg.GetTopic()),
+							attribute.String("message.id", msg.GetMessageId()),
+						),
+						trace.WithSpanKind(trace.SpanKindConsumer),
+					)
+					defer msgSpan.End()
+
+					var data T
+					if err = json.Unmarshal(msg.GetBody(), &data); err != nil {
+						c.handler.ErrorHandler(msgCtx, data, err)
+						msgSpan.RecordError(err)
+						msgSpan.SetStatus(codes.Error, err.Error())
+						if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
+							msgSpan.RecordError(ackErr)
+						}
+						return
 					}
-					msgSpan.End()
-					continue
-				}
 
-				// ack
-				if err = c.consumer.Ack(msgCtx, msg); err != nil {
-					msgSpan.RecordError(err)
-					msgSpan.SetStatus(codes.Error, err.Error())
-				} else {
-					msgSpan.SetStatus(codes.Ok, "")
-				}
+					if err = c.handler.Consume(msgCtx, data); err != nil {
+						c.handler.ErrorHandler(msgCtx, data, err)
+						msgSpan.RecordError(err)
+						msgSpan.SetStatus(codes.Error, err.Error())
+						if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
+							msgSpan.RecordError(ackErr)
+						}
+						return
+					}
 
-				msgSpan.End()
+					// ack
+					if err = c.consumer.Ack(msgCtx, msg); err != nil {
+						msgSpan.RecordError(err)
+						msgSpan.SetStatus(codes.Error, err.Error())
+					} else {
+						msgSpan.SetStatus(codes.Ok, "")
+					}
+				}()
 			}
 		}
 	}
