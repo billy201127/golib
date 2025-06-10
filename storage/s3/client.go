@@ -37,6 +37,9 @@ func NewClient(cfg types.Config) (*Client, error) {
 	// create s3 client
 	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = true // use path style for s3, default is virtual hosted-style
+		if cfg.Endpoint != "" {
+			o.BaseEndpoint = aws.String(cfg.Endpoint)
+		}
 	})
 
 	return &Client{
