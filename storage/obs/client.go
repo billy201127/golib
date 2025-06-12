@@ -105,3 +105,21 @@ func (c *Client) SignUrl(ctx context.Context, remote string, expires int) (strin
 
 	return url.QueryEscape(output.SignedUrl), nil
 }
+
+func (c *Client) CopyFile(ctx context.Context, source, target string) error {
+	input := &huaweiObs.CopyObjectInput{
+		ObjectOperationInput: huaweiObs.ObjectOperationInput{
+			Bucket: string(c.bucket),
+			Key:    fmt.Sprintf("%s", target),
+		},
+		CopySourceBucket: string(c.bucket),
+		CopySourceKey:    fmt.Sprintf("%s", source),
+	}
+
+	_, err := c.obsClient.CopyObject(input)
+	if err != nil {
+		logc.Errorf(ctx, "Copy file error, errMsg: %s", err.Error())
+	}
+
+	return err
+}

@@ -97,3 +97,17 @@ func (c *Client) SignUrl(ctx context.Context, remote string, expires int) (strin
 
 	return url.QueryEscape(req.URL), nil
 }
+
+func (c *Client) CopyFile(ctx context.Context, source, target string) error {
+	_, err := c.ossClient.CopyObject(ctx, &oss.CopyObjectRequest{
+		Bucket:       oss.Ptr(string(c.bucket)),
+		Key:          oss.Ptr(fmt.Sprintf("%s", target)),
+		SourceBucket: oss.Ptr(string(c.bucket)),
+		SourceKey:    oss.Ptr(fmt.Sprintf("%s", source)),
+	})
+	if err != nil {
+		logc.Errorf(ctx, "Copy file error, errMsg: %s", err.Error())
+	}
+
+	return err
+}

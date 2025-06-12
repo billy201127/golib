@@ -20,6 +20,7 @@ type Storage interface {
 	DownloadStream(ctx context.Context, remote string) (io.ReadCloser, error)
 
 	SignUrl(ctx context.Context, remote string, expires int) (string, error)
+	CopyFile(ctx context.Context, source, target string) error
 }
 
 func NewStorage(appId string, cfg types.Config) (Storage, error) {

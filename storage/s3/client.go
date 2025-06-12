@@ -133,3 +133,17 @@ func (c *Client) SignUrl(ctx context.Context, remote string, expires int) (strin
 
 	return request.URL, nil
 }
+
+func (c *Client) CopyFile(ctx context.Context, source, target string) error {
+	_, err := c.s3Client.CopyObject(ctx, &s3.CopyObjectInput{
+		CopySource: aws.String(fmt.Sprintf("%s/%s", c.bucket, source)),
+		Bucket:     aws.String(c.bucket),
+		Key:        aws.String(fmt.Sprintf("%s", target)),
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to copy object: %w", err)
+	}
+
+	return nil
+}
