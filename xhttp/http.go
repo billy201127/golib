@@ -158,8 +158,8 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 		URL:     url,
 		Method:  method,
 		Headers: header,
-		Request: body,
-		CTime:   time.Now().UnixMilli(),
+		// Request: body,
+		CTime: time.Now().UnixMilli(),
 	}
 
 	// 读取响应体并记录日志
