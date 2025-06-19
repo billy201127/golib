@@ -28,8 +28,8 @@ type RequestResponseLog struct {
 	URL      string            `json:"url"`
 	Method   string            `json:"method"`
 	Headers  map[string]string `json:"headers"`
-	Request  []byte            `json:"request"`
-	Response []byte            `json:"response"`
+	Request  string            `json:"request"`
+	Response string            `json:"response"`
 	Status   int               `json:"status"`
 	TimeCost int64             `json:"time_cost"`
 	CTime    int64             `json:"ctime"`
@@ -58,8 +58,8 @@ func (l *RequestResponseLog) ToJSON() ([]byte, error) {
 		URL:      l.URL,
 		Method:   l.Method,
 		Headers:  string(headersJSON),
-		Request:  string(l.Request),
-		Response: string(l.Response),
+		Request:  l.Request,
+		Response: l.Response,
 		Status:   l.Status,
 		TimeCost: l.TimeCost,
 		CTime:    l.CTime,

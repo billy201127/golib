@@ -158,7 +158,7 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 		URL:     url,
 		Method:  method,
 		Headers: header,
-		Request: body,
+		Request: string(body),
 		CTime:   time.Now().UnixMilli(),
 	}
 
@@ -173,7 +173,7 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 		if resp != nil {
 			// 记录响应信息
 			log.Status = resp.StatusCode
-			log.Response = respBody
+			log.Response = string(respBody)
 			log.TimeCost = time.Since(start).Milliseconds()
 			if err != nil {
 				if log.Extend == nil {
