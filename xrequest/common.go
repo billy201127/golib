@@ -46,6 +46,7 @@ func NewErrRespWithCtx(ctx context.Context, err error) *Response[any] {
 		Code:    ce.Code(),
 		Message: ce.Message(),
 		TraceId: xtrace.TraceID(ctx),
+		Data:    struct{}{},
 	}
 
 	if ce.Cause() != nil {
@@ -62,6 +63,7 @@ func NewErrLoginFailResp(err error) *Response[any] {
 	resp := &Response[any]{
 		Code:    ce.Code(),
 		Message: ce.Message(),
+		Data:    struct{}{},
 	}
 
 	if ce.Cause() != nil {
