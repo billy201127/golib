@@ -26,7 +26,7 @@ var (
 	// maximum number of messages received at once time
 	maxMessageNum int32 = 16
 	// invisibleDuration should > 20s
-	invisibleDuration = time.Second * 20
+	invisibleDuration = time.Second * 120
 )
 
 type ConsumerConfig struct {
@@ -168,7 +168,9 @@ func (c *Consumer[T]) consume() {
 						carrier[k] = v
 					}
 
-					ctx := context.Background()
+					ctx, cancel := context.WithTimeout(context.Background(), invisibleDuration-time.Second*2)
+					defer cancel()
+
 					ctx = prop.Extract(ctx, carrier)
 
 					msgCtx, msgSpan := tracer.Start(ctx, "rocket.Consumer.ProcessMessage",
