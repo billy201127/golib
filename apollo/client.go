@@ -9,11 +9,10 @@ import (
 )
 
 type Config struct {
-	AppID           string
-	Cluster         string
-	Addr            string
-	PrivateSpace    string
-	ChangeListeners []storage.ChangeListener // 支持多个配置变更监听器
+	AppID        string
+	Cluster      string
+	Addr         string
+	PrivateSpace string
 }
 
 // Client Apollo 客户端封装
@@ -21,6 +20,13 @@ type Client struct {
 	client  *agollo.Client
 	Default *storage.Config // application namespace
 	Private *storage.Config // private namespace
+}
+
+// AddChangeListener 向已存在的客户端添加新的配置变更监听器
+func (c *Client) AddChangeListener(listener storage.ChangeListener) {
+	if c.client != nil {
+		(*c.client).AddChangeListener(listener)
+	}
 }
 
 // 预定义的命名空间
@@ -42,16 +48,6 @@ func NewClient(conf *Config) (*Client, error) {
 		return nil, fmt.Errorf("create apollo client error: %w", err)
 	}
 
-	// add change listeners if provided
-	if len(conf.ChangeListeners) > 0 {
-		for _, listener := range conf.ChangeListeners {
-			client.AddChangeListener(listener)
-		}
-	} else {
-		// use default listener if no listeners provided
-		client.AddChangeListener(&CustomChangeListener{})
-	}
-
 	c := &Client{
 		client:  &client,
 		Default: client.GetConfig(ApplicationNamespace),
@@ -59,13 +55,6 @@ func NewClient(conf *Config) (*Client, error) {
 	}
 
 	return c, nil
-}
-
-// AddChangeListener 向已存在的客户端添加新的配置变更监听器
-func (c *Client) AddChangeListener(listener storage.ChangeListener) {
-	if c.client != nil {
-		(*c.client).AddChangeListener(listener)
-	}
 }
 
 // CustomChangeListener 默认的配置变更监听器
