@@ -42,3 +42,20 @@ func GetApp(ctx context.Context, req interface{}) (string, error) {
 
 	return "", errors.New("neither App nor AppId field exists in request struct")
 }
+
+func GetCountry(ctx context.Context, req interface{}) (string, error) {
+	if v := ctx.Value("COUNTRY"); v != nil {
+		if str, ok := v.(fmt.Stringer); ok {
+			return str.String(), nil
+		}
+		return fmt.Sprint(v), nil
+	}
+
+	if v := ctx.Value("country"); v != nil {
+		if str, ok := v.(fmt.Stringer); ok {
+			return str.String(), nil
+		}
+		return fmt.Sprint(v), nil
+	}
+	return "", errors.New("COUNTRY field not exists in request struct")
+}
