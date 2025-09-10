@@ -1,7 +1,15 @@
 package main
 
-import "gomod.pri/golib/notify"
+import (
+	"fmt"
+
+	"gomod.pri/golib/confuse"
+)
 
 func main() {
-	notify.Example()
+	sdk := confuse.NewObfuscatorSDK(100)
+	// obfWords := sdk.ObfuscateWord("hello")
+	deobfWords := sdk.DeobfuscateWord("meta")
+	// fmt.Println(obfWords)
+	fmt.Println(deobfWords)
 }
