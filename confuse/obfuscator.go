@@ -1,224 +1,185 @@
 package confuse
 
 import (
-	"hash/fnv"
 	"sort"
-	"strings"
-	"unicode"
 )
 
 // ============================================================================
-// Obfuscator SDK - With Embedded Dictionary and Consistent Word Mapping
+// Obfuscator SDK - With Reversible Linear Congruential Mapping
 // ============================================================================
 
-// ObfuscatorSDK provides a simple interface for field name obfuscation using embedded dictionary
 type ObfuscatorSDK struct {
 	dictionary []string
 	seed       int
 }
 
-// ObfuscatorConfig provides configuration options for the obfuscator
-type ObfuscatorConfig struct {
-	Seed             int      // Fixed seed for deterministic results
-	CustomDictionary []string // Optional custom dictionary words
-}
-
 // NewObfuscatorSDK creates a new obfuscator SDK instance with embedded dictionary
-// seed: a fixed number to ensure deterministic obfuscation results
 func NewObfuscatorSDK(seed int) *ObfuscatorSDK {
 	sdk := &ObfuscatorSDK{
 		seed: seed,
 	}
-
-	// Load embedded dictionary
 	sdk.loadEmbeddedDictionary()
-
 	return sdk
 }
 
-// NewObfuscatorSDKWithConfig creates an obfuscator with custom configuration
-func NewObfuscatorSDKWithConfig(config ObfuscatorConfig) *ObfuscatorSDK {
-	sdk := &ObfuscatorSDK{
-		seed: config.Seed,
-	}
-
-	if len(config.CustomDictionary) > 0 {
-		sdk.dictionary = make([]string, len(config.CustomDictionary))
-		copy(sdk.dictionary, config.CustomDictionary)
-		sort.Strings(sdk.dictionary)
-	} else {
-		sdk.loadEmbeddedDictionary()
-	}
-
-	return sdk
-}
-
-// ObfuscateFields takes a list of field names and returns their obfuscated mappings
-// fields: slice of field names to obfuscate
-// Returns: map[originalField]obfuscatedField
-func (sdk *ObfuscatorSDK) ObfuscateFields(fields []string) map[string]string {
-	if len(fields) == 0 {
-		return make(map[string]string)
-	}
-
-	result := make(map[string]string)
-
-	for _, field := range fields {
-		if field == "" {
-			result[field] = ""
-			continue
-		}
-
-		words := sdk.splitFieldName(field)
-		if len(words) == 0 {
-			result[field] = field
-			continue
-		}
-
-		obfuscatedWords := make([]string, len(words))
-		for i, word := range words {
-			obfuscatedWords[i] = sdk.obfuscateWord(word)
-		}
-
-		result[field] = strings.Join(obfuscatedWords, "_")
-	}
-
-	return result
-}
-
-// ObfuscateField obfuscates a single field name
-// field: the field name to obfuscate
-// Returns: obfuscated field name
-func (sdk *ObfuscatorSDK) ObfuscateField(field string) string {
-	mappings := sdk.ObfuscateFields([]string{field})
-	if obfuscated, exists := mappings[field]; exists {
-		return obfuscated
-	}
-	return field // fallback to original if obfuscation fails
-}
-
-// BatchObfuscate provides a convenient way to obfuscate multiple field groups
-// fieldGroups: map where key is group name, value is slice of fields in that group
-// Returns: map[groupName]map[originalField]obfuscatedField
-func (sdk *ObfuscatorSDK) BatchObfuscate(fieldGroups map[string][]string) map[string]map[string]string {
-	result := make(map[string]map[string]string)
-
-	for groupName, fields := range fieldGroups {
-		result[groupName] = sdk.ObfuscateFields(fields)
-	}
-
-	return result
-}
-
-// GetReverseMapping creates a reverse mapping from obfuscated names back to original names
-func (sdk *ObfuscatorSDK) GetReverseMapping(fields []string) map[string]string {
-	forwardMapping := sdk.ObfuscateFields(fields)
-	reverseMapping := make(map[string]string)
-
-	for original, obfuscated := range forwardMapping {
-		reverseMapping[obfuscated] = original
-	}
-
-	return reverseMapping
-}
-
-// GetDictionarySize returns the size of the current dictionary
-func (sdk *ObfuscatorSDK) GetDictionarySize() int {
-	return len(sdk.dictionary)
-}
-
-// SetSeed updates the seed for obfuscation (affects future obfuscations)
-func (sdk *ObfuscatorSDK) SetSeed(seed int) {
-	sdk.seed = seed
-}
-
-// ============================================================================
-// Internal Implementation
-// ============================================================================
-
-// obfuscateWord maps a single word to an obfuscated word using deterministic hash
-// This ensures the same word always maps to the same obfuscated word regardless of context
-func (sdk *ObfuscatorSDK) obfuscateWord(word string) string {
+// ObfuscateWord maps a word from the dictionary to another dictionary word (reversible)
+func (sdk *ObfuscatorSDK) ObfuscateWord(word string) string {
 	if len(sdk.dictionary) == 0 {
 		return word
 	}
 
-	// Create a deterministic hash based on the word and seed
-	h := fnv.New64a()
-	h.Write([]byte(word))
-	h.Write([]byte{byte(sdk.seed), byte(sdk.seed >> 8), byte(sdk.seed >> 16), byte(sdk.seed >> 24)})
+	m := len(sdk.dictionary)
 
-	hash := h.Sum64()
-	index := int(hash % uint64(len(sdk.dictionary)))
+	// 确保种子为正数
+	seed := sdk.seed
+	if seed < 0 {
+		seed = -seed
+	}
 
-	return sdk.dictionary[index]
+	// 生成与m互质的乘法因子a
+	a := sdk.generateCoprime(seed, m)
+	b := seed % m
+
+	// map word to dictionary index
+	idx := sdk.wordToIndex(word)
+	if idx < 0 {
+		return word // not found
+	}
+
+	// apply linear congruential mapping
+	newIdx := (a*idx + b) % m
+	if newIdx < 0 {
+		newIdx += m
+	}
+	return sdk.dictionary[newIdx]
 }
 
-// splitFieldName splits a field name into words (camelCase and underscore separation)
-func (sdk *ObfuscatorSDK) splitFieldName(fieldName string) []string {
-	if fieldName == "" {
-		return nil
+func (sdk *ObfuscatorSDK) ObfuscateWords(words []string) map[string]string {
+	obfWords := make(map[string]string)
+	for _, word := range words {
+		obfWords[word] = sdk.ObfuscateWord(word)
 	}
+	return obfWords
+}
 
-	// Split by underscores first
-	parts := strings.Split(fieldName, "_")
-	var words []string
-
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-
-		// Split by camel case
-		camelWords := sdk.splitCamelCase(part)
-		for _, word := range camelWords {
-			if word != "" {
-				words = append(words, strings.ToLower(word))
-			}
-		}
+// DeobfuscateWords reverses ObfuscateWords mapping
+func (sdk *ObfuscatorSDK) DeobfuscateWords(obfWords []string) map[string]string {
+	words := make(map[string]string)
+	for _, obfWord := range obfWords {
+		words[obfWord] = sdk.DeobfuscateWord(obfWord)
 	}
-
 	return words
 }
 
-// splitCamelCase splits a camelCase string into words
-func (sdk *ObfuscatorSDK) splitCamelCase(s string) []string {
-	if s == "" {
-		return nil
+// DeobfuscateWord reverses ObfuscateWord mapping
+func (sdk *ObfuscatorSDK) DeobfuscateWord(obfWord string) string {
+	if len(sdk.dictionary) == 0 {
+		return obfWord
 	}
 
-	var words []string
-	var current []rune
+	m := len(sdk.dictionary)
 
-	for i, r := range s {
-		if i == 0 {
-			current = append(current, r)
-			continue
-		}
-
-		// Split on uppercase letter following lowercase
-		if unicode.IsUpper(r) && i > 0 && !unicode.IsUpper(rune(s[i-1])) {
-			if len(current) > 0 {
-				words = append(words, string(current))
-				current = []rune{}
-			}
-		}
-		current = append(current, r)
+	// 确保种子为正数
+	seed := sdk.seed
+	if seed < 0 {
+		seed = -seed
 	}
 
-	if len(current) > 0 {
-		words = append(words, string(current))
+	// 生成与m互质的乘法因子a
+	a := sdk.generateCoprime(seed, m)
+	b := seed % m
+
+	// find index of obfuscated word
+	idx := sdk.wordToIndex(obfWord)
+	if idx < 0 {
+		return obfWord // not found
 	}
 
-	return words
+	// compute modular inverse of a
+	ainv := modularInverse(a, m)
+	if ainv == -1 {
+		return obfWord // cannot reverse
+	}
+
+	// reverse mapping: x = (y-b)*a^(-1) mod m
+	origIdx := (ainv * ((idx - b + m) % m)) % m
+	if origIdx < 0 {
+		origIdx += m
+	}
+	return sdk.dictionary[origIdx]
 }
 
-// loadEmbeddedDictionary loads the built-in word dictionary from embedded file
+// ============================================================================
+// Helpers
+// ============================================================================
+
+// generateCoprime generates a number coprime to m using the seed
+func (sdk *ObfuscatorSDK) generateCoprime(seed, m int) int {
+	// 使用种子生成基础数
+	base := seed % m
+	if base <= 1 {
+		base = 2
+	}
+
+	// 找到第一个与m互质的数
+	for gcd(base, m) != 1 {
+		base = (base + 1) % m
+		if base <= 1 {
+			base = 2
+		}
+	}
+
+	return base
+}
+
+// gcd calculates the greatest common divisor
+func gcd(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
+}
+
+// wordToIndex returns the dictionary index of a word, or -1 if not found
+func (sdk *ObfuscatorSDK) wordToIndex(word string) int {
+	idx := sort.SearchStrings(sdk.dictionary, word)
+	if idx >= len(sdk.dictionary) || sdk.dictionary[idx] != word {
+		return -1
+	}
+	return idx
+}
+
+// modularInverse computes modular inverse of a under modulo m
+func modularInverse(a, m int) int {
+	if m == 1 {
+		return 0
+	}
+
+	// 确保a为正数
+	a = ((a % m) + m) % m
+
+	t, newt := 0, 1
+	r, newr := m, a
+
+	for newr != 0 {
+		quotient := r / newr
+		t, newt = newt, t-quotient*newt
+		r, newr = newr, r-quotient*newr
+	}
+
+	if r > 1 {
+		return -1 // not invertible
+	}
+	if t < 0 {
+		t += m
+	}
+
+	return t
+}
+
+// loadEmbeddedDictionary loads the built-in word dictionary
 func (sdk *ObfuscatorSDK) loadEmbeddedDictionary() {
-	// Use the embedded dictionary from the same package
 	sdk.dictionary = make([]string, len(Words))
 	copy(sdk.dictionary, Words)
-
-	// Sort for deterministic ordering
 	sort.Strings(sdk.dictionary)
 }
