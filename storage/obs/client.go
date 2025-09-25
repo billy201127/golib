@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	huaweiObs "github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"github.com/zeromicro/go-zero/core/logc"
@@ -25,10 +26,23 @@ func NewClient(cfg types.Config) (*Client, error) {
 	return &Client{obsClient: obsClient, AppId: cfg.App, bucket: cfg.Bucket}, nil
 }
 
+// buildKey 构建完整的对象Key，避免双斜杠问题
+func (c *Client) buildKey(remote string) string {
+	// 移除remote开头的斜杠
+	remote = strings.TrimPrefix(remote, "/")
+	// 确保AppId不以斜杠结尾
+	appId := strings.TrimSuffix(c.AppId, "/")
+	// 构建完整路径
+	if appId == "" {
+		return remote
+	}
+	return fmt.Sprintf("%s/%s", appId, remote)
+}
+
 func (c *Client) UploadFile(ctx context.Context, remote, local string) error {
 	input := &huaweiObs.PutFileInput{}
 	input.Bucket = string(c.bucket)
-	input.Key = fmt.Sprintf("%s/%s", c.AppId, remote)
+	input.Key = c.buildKey(remote)
 	input.SourceFile = local
 
 	_, err := c.obsClient.PutFile(input)
@@ -42,7 +56,7 @@ func (c *Client) UploadFile(ctx context.Context, remote, local string) error {
 func (c *Client) UploadStream(ctx context.Context, remote string, stream io.Reader) error {
 	input := &huaweiObs.PutObjectInput{}
 	input.Bucket = string(c.bucket)
-	input.Key = fmt.Sprintf("%s/%s", c.AppId, remote)
+	input.Key = c.buildKey(remote)
 	input.Body = stream
 
 	_, err := c.obsClient.PutObject(input)
@@ -56,7 +70,7 @@ func (c *Client) UploadStream(ctx context.Context, remote string, stream io.Read
 func (c *Client) DownloadFile(ctx context.Context, remote, local string) error {
 	input := &huaweiObs.DownloadFileInput{}
 	input.Bucket = string(c.bucket)
-	input.Key = fmt.Sprintf("%s/%s", c.AppId, remote)
+	input.Key = c.buildKey(remote)
 	input.DownloadFile = local
 
 	input.EnableCheckpoint = true
@@ -74,7 +88,7 @@ func (c *Client) DownloadFile(ctx context.Context, remote, local string) error {
 func (c *Client) DownloadStream(ctx context.Context, remote string) (io.ReadCloser, error) {
 	input := &huaweiObs.GetObjectInput{}
 	input.Bucket = string(c.bucket)
-	input.Key = fmt.Sprintf("%s/%s", c.AppId, remote)
+	input.Key = c.buildKey(remote)
 
 	output, err := c.obsClient.GetObject(input)
 	if err != nil {
@@ -86,15 +100,19 @@ func (c *Client) DownloadStream(ctx context.Context, remote string) (io.ReadClos
 }
 
 func (c *Client) SignUrl(ctx context.Context, remote string, expires int) (string, error) {
+	// 构建Key，避免双斜杠问题
+	key := c.buildKey(remote)
+
 	input := &huaweiObs.CreateSignedUrlInput{
+		Method:  huaweiObs.HttpMethodGet,
 		Bucket:  string(c.bucket),
-		Key:     fmt.Sprintf("%s/%s", c.AppId, remote),
+		Key:     key,
 		Expires: expires,
 	}
 
 	output, err := c.obsClient.CreateSignedUrl(input)
 	if err != nil {
-		logc.Errorf(ctx, "Create signed url error: %v", err)
+		logc.Errorf(ctx, "Create signed url error: %v, key: %s", err, key)
 		return "", err
 	}
 
@@ -109,10 +127,10 @@ func (c *Client) CopyFile(ctx context.Context, source, target string) error {
 	input := &huaweiObs.CopyObjectInput{
 		ObjectOperationInput: huaweiObs.ObjectOperationInput{
 			Bucket: string(c.bucket),
-			Key:    fmt.Sprintf("%s", target),
+			Key:    c.buildKey(target),
 		},
 		CopySourceBucket: string(c.bucket),
-		CopySourceKey:    fmt.Sprintf("%s", source),
+		CopySourceKey:    c.buildKey(source),
 	}
 
 	_, err := c.obsClient.CopyObject(input)
