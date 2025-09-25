@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/url"
 
 	huaweiObs "github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"github.com/zeromicro/go-zero/core/logc"
@@ -103,7 +102,7 @@ func (c *Client) SignUrl(ctx context.Context, remote string, expires int) (strin
 		return "", fmt.Errorf("Signed url is empty")
 	}
 
-	return url.QueryEscape(output.SignedUrl), nil
+	return output.SignedUrl, nil
 }
 
 func (c *Client) CopyFile(ctx context.Context, source, target string) error {
