@@ -32,6 +32,18 @@ func getContextValueCaseInsensitive(ctx context.Context, key string) interface{}
 	return nil
 }
 
+// getFieldByNameCaseInsensitive tries to get a struct field by name, case-insensitively
+func getFieldByNameCaseInsensitive(v reflect.Value, name string) (reflect.Value, bool) {
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		field := t.Field(i)
+		if strings.EqualFold(field.Name, name) {
+			return v.Field(i), true
+		}
+	}
+	return reflect.Value{}, false
+}
+
 func GetApp(ctx context.Context, req interface{}) (string, error) {
 	if v := getContextValueCaseInsensitive(ctx, "APP-ID"); v != nil {
 		if str, ok := v.(fmt.Stringer); ok {
@@ -53,15 +65,15 @@ func GetApp(ctx context.Context, req interface{}) (string, error) {
 		return "", errors.New("request struct is not a struct")
 	}
 
-	// Try to get App field first
-	f := v.FieldByName("App")
-	if f.IsValid() {
+	// Try to get App field first (case-insensitive)
+	f, ok := getFieldByNameCaseInsensitive(v, "App")
+	if ok {
 		return fmt.Sprint(f.Interface()), nil
 	}
 
-	// If App field doesn't exist, try to get AppId field
-	f = v.FieldByName("AppId")
-	if f.IsValid() {
+	// If App field doesn't exist, try to get AppId field (case-insensitive)
+	f, ok = getFieldByNameCaseInsensitive(v, "AppId")
+	if ok {
 		return fmt.Sprint(f.Interface()), nil
 	}
 
