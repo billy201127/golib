@@ -5,10 +5,35 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
+// getContextValueCaseInsensitive tries to get a value from context with different case variations
+func getContextValueCaseInsensitive(ctx context.Context, key string) interface{} {
+	// Generate common case variations
+	caser := cases.Title(language.English)
+	variations := []string{
+		key,                  // original
+		strings.ToUpper(key), // UPPER
+		strings.ToLower(key), // lower
+		caser.String(key),    // Title Case
+	}
+
+	// Try each variation
+	for _, k := range variations {
+		if v := ctx.Value(k); v != nil {
+			return v
+		}
+	}
+
+	return nil
+}
+
 func GetApp(ctx context.Context, req interface{}) (string, error) {
-	if v := ctx.Value("APP-ID"); v != nil {
+	if v := getContextValueCaseInsensitive(ctx, "APP-ID"); v != nil {
 		if str, ok := v.(fmt.Stringer); ok {
 			return str.String(), nil
 		}
@@ -44,14 +69,7 @@ func GetApp(ctx context.Context, req interface{}) (string, error) {
 }
 
 func GetCountry(ctx context.Context, req interface{}) (string, error) {
-	if v := ctx.Value("COUNTRY"); v != nil {
-		if str, ok := v.(fmt.Stringer); ok {
-			return str.String(), nil
-		}
-		return fmt.Sprint(v), nil
-	}
-
-	if v := ctx.Value("country"); v != nil {
+	if v := getContextValueCaseInsensitive(ctx, "COUNTRY"); v != nil {
 		if str, ok := v.(fmt.Stringer); ok {
 			return str.String(), nil
 		}
