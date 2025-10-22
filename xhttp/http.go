@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -147,6 +148,13 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 
 	req = req.WithContext(ctx)
 	propagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
+
+	// Extract APP-META from context and set to header
+	if appMeta := ctx.Value("APP-META"); appMeta != nil {
+		if metaBytes, err := json.Marshal(appMeta); err == nil {
+			req.Header.Set("APP-META", string(metaBytes))
+		}
+	}
 
 	// 设置请求头
 	for k, v := range header {
