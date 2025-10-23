@@ -22,7 +22,7 @@ func TestBasicUnitFunctionality(t *testing.T) {
 			name:     "非词典词测试",
 			seed:     12345,
 			input:    "xyz123",
-			wantSame: true,
+			wantSame: false, // 现在非词典词会使用字符级加密，所以会改变
 		},
 		{
 			name:     "词典词测试",

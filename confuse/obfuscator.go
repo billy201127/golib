@@ -2,29 +2,56 @@ package confuse
 
 import (
 	"sort"
+	"strings"
 )
 
 // ============================================================================
 // Obfuscator SDK - With Reversible Linear Congruential Mapping
 // ============================================================================
 
+// Character sets for position-dependent encryption
+const (
+	charsetLower = "abcdefghijklmnopqrstuvwxyz"
+	charsetUpper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	charsetDigit = "0123456789"
+)
+
 type ObfuscatorSDK struct {
-	dictionary []string
-	seed       int
+	dictionary       []string
+	seed             int
+	encryptOutOfDict bool // if true, encrypt out-of-dictionary words; if false, keep them unchanged
 }
 
 // NewObfuscatorSDK creates a new obfuscator SDK instance with embedded dictionary
+// By default, out-of-dictionary words will be encrypted using character-level encryption
 func NewObfuscatorSDK(seed int) *ObfuscatorSDK {
 	sdk := &ObfuscatorSDK{
-		seed: seed,
+		seed:             seed,
+		encryptOutOfDict: true, // default: encrypt out-of-dictionary words
 	}
 	sdk.loadEmbeddedDictionary()
 	return sdk
 }
 
+// SetEncryptOutOfDict sets whether to encrypt out-of-dictionary words
+// If set to false, out-of-dictionary words will be kept unchanged
+func (sdk *ObfuscatorSDK) SetEncryptOutOfDict(encrypt bool) *ObfuscatorSDK {
+	sdk.encryptOutOfDict = encrypt
+	return sdk
+}
+
 // ObfuscateWord maps a word from the dictionary to another dictionary word (reversible)
+// If word is not in dictionary and encryptOutOfDict is true, use character-level encryption
+// If word is not in dictionary and encryptOutOfDict is false, return word unchanged
 func (sdk *ObfuscatorSDK) ObfuscateWord(word string) string {
+	if len(word) == 0 {
+		return word
+	}
+
 	if len(sdk.dictionary) == 0 {
+		if sdk.encryptOutOfDict {
+			return sdk.encryptByChar(word)
+		}
 		return word
 	}
 
@@ -43,7 +70,11 @@ func (sdk *ObfuscatorSDK) ObfuscateWord(word string) string {
 	// map word to dictionary index
 	idx := sdk.wordToIndex(word)
 	if idx < 0 {
-		return word // not found
+		// not found in dictionary
+		if sdk.encryptOutOfDict {
+			return sdk.encryptByChar(word)
+		}
+		return word // keep unchanged
 	}
 
 	// apply linear congruential mapping
@@ -72,8 +103,17 @@ func (sdk *ObfuscatorSDK) DeobfuscateWords(obfWords []string) map[string]string 
 }
 
 // DeobfuscateWord reverses ObfuscateWord mapping
+// If word is not in dictionary and encryptOutOfDict is true, use character-level decryption
+// If word is not in dictionary and encryptOutOfDict is false, return word unchanged
 func (sdk *ObfuscatorSDK) DeobfuscateWord(obfWord string) string {
+	if len(obfWord) == 0 {
+		return obfWord
+	}
+
 	if len(sdk.dictionary) == 0 {
+		if sdk.encryptOutOfDict {
+			return sdk.decryptByChar(obfWord)
+		}
 		return obfWord
 	}
 
@@ -92,7 +132,11 @@ func (sdk *ObfuscatorSDK) DeobfuscateWord(obfWord string) string {
 	// find index of obfuscated word
 	idx := sdk.wordToIndex(obfWord)
 	if idx < 0 {
-		return obfWord // not found
+		// not found in dictionary
+		if sdk.encryptOutOfDict {
+			return sdk.decryptByChar(obfWord)
+		}
+		return obfWord // keep unchanged
 	}
 
 	// compute modular inverse of a
@@ -182,4 +226,112 @@ func (sdk *ObfuscatorSDK) loadEmbeddedDictionary() {
 	sdk.dictionary = make([]string, len(Words))
 	copy(sdk.dictionary, Words)
 	sort.Strings(sdk.dictionary)
+}
+
+// ============================================================================
+// Character-level Encryption (for out-of-dictionary words)
+// ============================================================================
+
+// encryptByChar encrypts a word using position-dependent character mapping
+func (sdk *ObfuscatorSDK) encryptByChar(word string) string {
+	result := make([]byte, len(word))
+	for i := 0; i < len(word); i++ {
+		result[i] = sdk.encryptChar(word[i], i)
+	}
+	return string(result)
+}
+
+// decryptByChar decrypts a word using position-dependent character mapping
+func (sdk *ObfuscatorSDK) decryptByChar(word string) string {
+	result := make([]byte, len(word))
+	for i := 0; i < len(word); i++ {
+		result[i] = sdk.decryptChar(word[i], i)
+	}
+	return string(result)
+}
+
+// encryptChar encrypts a single character at given position using LCG
+func (sdk *ObfuscatorSDK) encryptChar(ch byte, pos int) byte {
+	var charset string
+
+	// determine character set based on character type
+	if ch >= 'a' && ch <= 'z' {
+		charset = charsetLower
+	} else if ch >= 'A' && ch <= 'Z' {
+		charset = charsetUpper
+	} else if ch >= '0' && ch <= '9' {
+		charset = charsetDigit
+	} else {
+		// non-alphanumeric characters remain unchanged
+		return ch
+	}
+
+	m := len(charset)
+	idx := strings.IndexByte(charset, ch)
+	if idx < 0 {
+		return ch
+	}
+
+	// 确保种子为正数
+	seed := sdk.seed
+	if seed < 0 {
+		seed = -seed
+	}
+
+	// position-dependent LCG mapping
+	a := sdk.generateCoprime(seed, m)
+	b := (seed + pos) % m // each position has different offset
+
+	newIdx := (a*idx + b) % m
+	if newIdx < 0 {
+		newIdx += m
+	}
+
+	return charset[newIdx]
+}
+
+// decryptChar decrypts a single character at given position using modular inverse
+func (sdk *ObfuscatorSDK) decryptChar(ch byte, pos int) byte {
+	var charset string
+
+	// determine character set based on character type
+	if ch >= 'a' && ch <= 'z' {
+		charset = charsetLower
+	} else if ch >= 'A' && ch <= 'Z' {
+		charset = charsetUpper
+	} else if ch >= '0' && ch <= '9' {
+		charset = charsetDigit
+	} else {
+		// non-alphanumeric characters remain unchanged
+		return ch
+	}
+
+	m := len(charset)
+	idx := strings.IndexByte(charset, ch)
+	if idx < 0 {
+		return ch
+	}
+
+	// 确保种子为正数
+	seed := sdk.seed
+	if seed < 0 {
+		seed = -seed
+	}
+
+	// position-dependent LCG mapping
+	a := sdk.generateCoprime(seed, m)
+	b := (seed + pos) % m
+	ainv := modularInverse(a, m)
+
+	if ainv == -1 {
+		return ch // cannot reverse
+	}
+
+	// reverse mapping: x = (y-b)*a^(-1) mod m
+	origIdx := (ainv * ((idx - b + m) % m)) % m
+	if origIdx < 0 {
+		origIdx += m
+	}
+
+	return charset[origIdx]
 }
