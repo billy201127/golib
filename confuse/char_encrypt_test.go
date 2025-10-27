@@ -298,3 +298,13 @@ func TestEncryptOutOfDictSwitch(t *testing.T) {
 		}
 	})
 }
+
+func TestCharacterEncryption1(t *testing.T) {
+	sdk := NewObfuscatorSDK(300000)
+
+	encrypted := sdk.ObfuscateWord("PROFILE")
+	t.Logf("HOME -> %s", encrypted)
+
+	decrypted := sdk.DeobfuscateWord(encrypted)
+	t.Logf("Decrypted: %s", decrypted)
+}
