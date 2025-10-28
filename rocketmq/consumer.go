@@ -35,6 +35,7 @@ type ConsumerConfig struct {
 	ConsumerGroup string              `json:"consumerGroup"`
 	Tags          []string            `json:"tags,optional"`
 	Credentials   *SessionCredentials `json:"credentials,optional"`
+	Workers       int                 `json:"workers,optional"`
 }
 type SessionCredentials struct {
 	AccessKey    string `json:"accessKey"`
@@ -95,7 +96,6 @@ type Consumer[T any] struct {
 	conf     *ConsumerConfig
 	consumer rmq.SimpleConsumer
 	handler  ConsumeHandler[T]
-	workers  int
 	done     chan struct{}
 	wg       sync.WaitGroup
 }
@@ -106,11 +106,11 @@ func (c *Consumer[T]) Start() {
 		return
 	}
 
-	if c.workers == 0 {
-		c.workers = 1
+	if c.conf.Workers == 0 {
+		c.conf.Workers = 1
 	}
 
-	for i := 0; i < c.workers; i++ {
+	for i := 0; i < c.conf.Workers; i++ {
 		c.wg.Add(1)
 		go func() {
 			defer c.wg.Done()
