@@ -56,6 +56,34 @@ func NewErrRespWithCtx(ctx context.Context, err error) *Response[any] {
 	return resp
 }
 
+func NewErrDataRespWithCtx(ctx context.Context, data any, err error) *Response[any] {
+	var ce *xerror.Error
+
+	switch typ := err.(type) {
+	case *xerror.Error:
+		ce = typ
+	default:
+		if errors.Is(typ, sqlx.ErrNotFound) {
+			ce = xerror.New(xerror.CodeDataNotFound, err)
+		} else {
+			ce = xerror.New(xerror.CodeInternalError, err)
+		}
+	}
+
+	resp := &Response[any]{
+		Code:    ce.Code(),
+		Message: ce.Message(),
+		TraceId: xtrace.TraceID(ctx),
+		Data:    data,
+	}
+
+	if ce.Cause() != nil {
+		resp.ErrMsg = ce.Cause().Error()
+	}
+
+	return resp
+}
+
 func NewErrLoginFailResp(err error) *Response[any] {
 	var ce *xerror.Error
 	ce = xerror.New(xerror.CodeUnauthorized, err)
