@@ -11,9 +11,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.29.15
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.80.1
 	github.com/bwmarrin/snowflake v0.3.0
+	github.com/fogleman/gg v1.3.0
 	github.com/go-playground/locales v0.14.0
 	github.com/go-playground/universal-translator v0.18.0
 	github.com/go-playground/validator/v10 v10.11.0
+	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.24.9+incompatible
 	github.com/redis/go-redis/v9 v9.7.1
 	github.com/samber/lo v1.49.1
@@ -23,6 +25,7 @@ require (
 	github.com/zeromicro/go-zero v1.8.1
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
+	golang.org/x/image v0.0.0-20190802002840-cff245a6509b
 )
 
 require (
