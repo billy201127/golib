@@ -3,7 +3,9 @@ package watermark
 import (
 	"bytes"
 	"context"
+	"image"
 	"io"
+	"net/http"
 
 	"github.com/fogleman/gg"
 	"github.com/golang/freetype/truetype"
@@ -11,14 +13,32 @@ import (
 	"golang.org/x/image/font/gofont/goregular"
 )
 
-func AddWatermark(ctx context.Context, imagePath string, watermarkText string) io.ReadCloser {
+func Add(ctx context.Context, uri string, watermarkText string) io.ReadCloser {
 	const fontSize = 48
 
-	// 加载原图
-	im, err := gg.LoadImage(imagePath)
-	if err != nil {
-		logc.Errorf(ctx, "AddWatermark load image failed, err: %v", err)
-		return nil
+	var (
+		im  image.Image
+		err error
+	)
+
+	// 从网络加载原图
+	if len(uri) >= 7 && (uri[:7] == "http://" || uri[:8] == "https://") {
+		resp, err := http.Get(uri)
+		if err != nil {
+			logc.Errorf(ctx, "AddWatermark load image failed, err: %v", err)
+		}
+
+		im, _, err = image.Decode(resp.Body)
+		if err != nil {
+			logc.Errorf(ctx, "AddWatermark load image failed, err: %v", err)
+			return nil
+		}
+	} else { // 从本地加载原图
+		im, err = gg.LoadImage(uri)
+		if err != nil {
+			logc.Errorf(ctx, "AddWatermark load image failed, err: %v", err)
+			return nil
+		}
 	}
 
 	w := im.Bounds().Dx()
@@ -34,7 +54,7 @@ func AddWatermark(ctx context.Context, imagePath string, watermarkText string) i
 		return nil
 	}
 	dc.SetFontFace(truetype.NewFace(font, &truetype.Options{Size: fontSize}))
-	dc.SetRGBA(1, 1, 1, 0.15) // 白色 + 半透明
+	dc.SetRGBA(1, 1, 1, 0.25) // 白色 + 半透明
 
 	// 旋转整个画布（比如斜45°）
 	dc.RotateAbout(gg.Radians(-30), float64(w)/2, float64(h)/2)
