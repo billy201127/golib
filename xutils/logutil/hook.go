@@ -216,5 +216,13 @@ func isBusinessFrame(function, file string) bool {
 		return false
 	}
 
+	// 过滤 go-zero sqlx 相关调用（SQL 错误包装层）
+	if strings.Contains(function, "github.com/zeromicro/go-zero/core/stores/sqlx.") {
+		return false
+	}
+	if strings.Contains(file, "/core/stores/sqlx/") {
+		return false
+	}
+
 	return true
 }
