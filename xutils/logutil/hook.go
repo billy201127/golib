@@ -24,6 +24,7 @@ type HookWriter struct {
 	interval time.Duration
 	limit    int
 	config   Config
+	filter   *frameFilter
 }
 
 type errorEvent struct {
@@ -44,15 +45,23 @@ type errorRecord struct {
 }
 
 func NewHookWriter(w io.Writer, config Config) *HookWriter {
+	filter := newFrameFilter()
+
+	intervalSec := config.IntervalSec
+	if intervalSec <= 0 {
+		intervalSec = defaultIntervalSec
+	}
+
 	hw := &HookWriter{
 		w:        w,
 		msgChan:  make(chan errorEvent, 1000),
 		quit:     make(chan struct{}),
 		records:  make(map[string]*errorRecord),
 		order:    make([]string, 0),
-		interval: time.Duration(config.IntervalSec) * time.Second,
+		interval: time.Duration(intervalSec) * time.Second,
 		limit:    config.Limit,
 		config:   config,
+		filter:   filter,
 	}
 
 	go hw.runNotifier()
@@ -64,7 +73,7 @@ func (h *HookWriter) Write(p []byte) (n int, err error) {
 
 	// only error/fatal
 	if strings.Contains(msg, ` error `) {
-		event := newErrorEvent(msg)
+		event := h.newErrorEvent(msg)
 		select {
 		case h.msgChan <- event:
 		default:
@@ -158,11 +167,13 @@ func sendNotify(webhook, secret string, msgs []string) {
 		return
 	}
 
-	robot.SendText(context.Background(), strings.Join(msgs, "\n"))
+	if err := robot.SendText(context.Background(), strings.Join(msgs, "\n")); err != nil {
+		logx.Errorf("failed to send notify: %v", err)
+	}
 }
 
-func newErrorEvent(msg string) errorEvent {
-	file, line, funcName := captureCaller()
+func (h *HookWriter) newErrorEvent(msg string) errorEvent {
+	file, line, funcName := h.filter.captureCaller()
 	fingerprint := fmt.Sprintf("%s:%d:%s", file, line, funcName)
 
 	return errorEvent{
@@ -174,22 +185,56 @@ func newErrorEvent(msg string) errorEvent {
 	}
 }
 
-func captureCaller() (file string, line int, funcName string) {
-	const maxDepth = 16
-	pcs := make([]uintptr, maxDepth)
-	n := runtime.Callers(3, pcs)
+const (
+	captureBaseSkip    = 3
+	defaultStackDepth  = 32
+	defaultAutoSkip    = 4
+	defaultIntervalSec = 60
+	runtimePathSegment = "/runtime/"
+)
+
+type frameFilter struct {
+	allowPrefixes []string
+	skipPrefixes  []string
+	includeStdlib bool
+}
+
+func newFrameFilter() *frameFilter {
+	filter := &frameFilter{
+		allowPrefixes: make([]string, len(defaultAllowPrefixes)),
+		skipPrefixes:  make([]string, len(defaultSkipPrefixes)),
+	}
+
+	copy(filter.allowPrefixes, defaultAllowPrefixes)
+	copy(filter.skipPrefixes, defaultSkipPrefixes)
+
+	return filter
+}
+
+var defaultSkipPrefixes = []string{
+	"gomod.pri/golib/xutils/logutil",
+	"github.com/zeromicro/go-zero/core/",
+	"golang.org/x/",
+}
+
+var defaultAllowPrefixes = []string{
+	"microloan",
+	"gomod.pri",
+}
+
+func (f *frameFilter) captureCaller() (file string, line int, funcName string) {
+	pcs := make([]uintptr, defaultStackDepth)
+	skip := captureBaseSkip + defaultAutoSkip
+	n := runtime.Callers(skip, pcs)
+	if n == 0 {
+		return "unknown", 0, "unknown"
+	}
+
 	frames := runtime.CallersFrames(pcs[:n])
+
 	for {
 		frame, more := frames.Next()
-		if frame.Function == "" {
-			if !more {
-				break
-			}
-			continue
-		}
-
-		// 跳过 logutil 自身以及日志库内部的调用栈，找到真正业务代码位置
-		if isBusinessFrame(frame.Function, frame.File) {
+		if frame.Function != "" && f.isBusinessFrame(frame.Function, frame.File) {
 			return filepath.Base(frame.File), frame.Line, frame.Function
 		}
 
@@ -201,20 +246,48 @@ func captureCaller() (file string, line int, funcName string) {
 	return "unknown", 0, "unknown"
 }
 
-// isBusinessFrame 判断当前帧是否为业务代码帧，而不是日志库/包装器自身
-func isBusinessFrame(function, file string) bool {
-	// 过滤本包
-	if strings.Contains(function, "xutils/logutil") {
+func (f *frameFilter) isBusinessFrame(function, file string) bool {
+	if function == "" || file == "" {
 		return false
 	}
 
-	// 统一过滤 go-zero core 下的所有组件（logx/sqlx/breaker/...）
-	if strings.Contains(function, "github.com/zeromicro/go-zero/core/") {
+	if len(f.allowPrefixes) > 0 && (hasAnyPrefix(function, f.allowPrefixes) || hasAnyPrefix(file, f.allowPrefixes)) {
+		return true
+	}
+
+	if strings.Contains(file, runtimePathSegment) {
 		return false
 	}
-	if strings.Contains(file, "/core/") {
+
+	if hasAnyPrefix(function, f.skipPrefixes) || hasAnyPrefix(file, f.skipPrefixes) {
+		return false
+	}
+
+	if !f.includeStdlib && isStdLibFile(file) {
 		return false
 	}
 
 	return true
+}
+
+func hasAnyPrefix(target string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if prefix == "" {
+			continue
+		}
+		if strings.HasPrefix(target, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func isStdLibFile(file string) bool {
+	goroot := runtime.GOROOT()
+	if goroot == "" {
+		return strings.Contains(file, "/src/")
+	}
+
+	src := filepath.Join(goroot, "src")
+	return strings.HasPrefix(file, src)
 }
