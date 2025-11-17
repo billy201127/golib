@@ -138,7 +138,7 @@ func (h *HookWriter) flush() {
 		if record == nil {
 			continue
 		}
-		summaries = append(summaries, fmt.Sprintf("[%d] %s:%d %s - %s", record.Count, record.File, record.Line, record.FuncName, strings.TrimSpace(record.LastMessage)))
+		summaries = append(summaries, fmt.Sprintf("[count: %d] %s:%d %s\n%s", record.Count, record.File, record.Line, record.FuncName, strings.TrimSpace(record.LastMessage)))
 	}
 
 	// batch send
