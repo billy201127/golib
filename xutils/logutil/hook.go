@@ -208,19 +208,11 @@ func isBusinessFrame(function, file string) bool {
 		return false
 	}
 
-	// 过滤 go-zero logx 相关调用（函数名或路径中包含 logx）
-	if strings.Contains(function, "logx.") || strings.Contains(function, "log.(*Logger)") {
+	// 统一过滤 go-zero core 下的所有组件（logx/sqlx/breaker/...）
+	if strings.Contains(function, "github.com/zeromicro/go-zero/core/") {
 		return false
 	}
-	if strings.Contains(file, "/core/logx/") {
-		return false
-	}
-
-	// 过滤 go-zero sqlx 相关调用（SQL 错误包装层）
-	if strings.Contains(function, "github.com/zeromicro/go-zero/core/stores/sqlx.") {
-		return false
-	}
-	if strings.Contains(file, "/core/stores/sqlx/") {
+	if strings.Contains(file, "/core/") {
 		return false
 	}
 
