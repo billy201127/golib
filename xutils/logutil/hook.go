@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -14,21 +16,40 @@ import (
 
 type HookWriter struct {
 	w        io.Writer
-	msgChan  chan string
+	msgChan  chan errorEvent
 	quit     chan struct{}
-	buffer   []string
+	records  map[string]*errorRecord
+	order    []string
 	mu       sync.Mutex
 	interval time.Duration
 	limit    int
 	config   Config
 }
 
+type errorEvent struct {
+	Fingerprint string
+	File        string
+	Line        int
+	FuncName    string
+	Message     string
+}
+
+type errorRecord struct {
+	Fingerprint string
+	File        string
+	Line        int
+	FuncName    string
+	Count       int
+	LastMessage string
+}
+
 func NewHookWriter(w io.Writer, config Config) *HookWriter {
 	hw := &HookWriter{
 		w:        w,
-		msgChan:  make(chan string, 1000),
+		msgChan:  make(chan errorEvent, 1000),
 		quit:     make(chan struct{}),
-		buffer:   make([]string, 0),
+		records:  make(map[string]*errorRecord),
+		order:    make([]string, 0),
 		interval: time.Duration(config.IntervalSec) * time.Second,
 		limit:    config.Limit,
 		config:   config,
@@ -43,8 +64,9 @@ func (h *HookWriter) Write(p []byte) (n int, err error) {
 
 	// only error/fatal
 	if strings.Contains(msg, ` error `) {
+		event := newErrorEvent(msg)
 		select {
-		case h.msgChan <- msg:
+		case h.msgChan <- event:
 		default:
 			// channel full , drop msg
 			logx.Infof("notify channel full, drop msg")
@@ -60,9 +82,21 @@ func (h *HookWriter) runNotifier() {
 
 	for {
 		select {
-		case msg := <-h.msgChan:
+		case event := <-h.msgChan:
 			h.mu.Lock()
-			h.buffer = append(h.buffer, msg)
+			record, ok := h.records[event.Fingerprint]
+			if !ok {
+				record = &errorRecord{
+					Fingerprint: event.Fingerprint,
+					File:        event.File,
+					Line:        event.Line,
+					FuncName:    event.FuncName,
+				}
+				h.records[event.Fingerprint] = record
+				h.order = append(h.order, event.Fingerprint)
+			}
+			record.Count++
+			record.LastMessage = event.Message
 			h.mu.Unlock()
 
 		case <-ticker.C:
@@ -79,22 +113,31 @@ func (h *HookWriter) flush() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if len(h.buffer) == 0 {
+	if len(h.records) == 0 {
 		return
 	}
 
-	// limit
-	toSend := h.buffer
-	if len(toSend) > h.limit {
-		toSend = toSend[:h.limit]
-		toSend = append(toSend, fmt.Sprintf("... skipped %d more errors", len(h.buffer)-h.limit))
+	var summaries []string
+	total := len(h.order)
+	for i, fingerprint := range h.order {
+		if i >= h.limit {
+			summaries = append(summaries, fmt.Sprintf("... skipped %d more error fingerprints", total-h.limit))
+			break
+		}
+
+		record := h.records[fingerprint]
+		if record == nil {
+			continue
+		}
+		summaries = append(summaries, fmt.Sprintf("[%d] %s:%d %s - %s", record.Count, record.File, record.Line, record.FuncName, strings.TrimSpace(record.LastMessage)))
 	}
 
 	// batch send
-	sendNotify(h.config.NotifyWebhook, h.config.NotifySecret, toSend)
+	sendNotify(h.config.NotifyWebhook, h.config.NotifySecret, summaries)
 
 	// clear buffer
-	h.buffer = make([]string, 0)
+	h.records = make(map[string]*errorRecord)
+	h.order = make([]string, 0)
 }
 
 func (h *HookWriter) Close() {
@@ -116,4 +159,43 @@ func sendNotify(webhook, secret string, msgs []string) {
 	}
 
 	robot.SendText(context.Background(), strings.Join(msgs, "\n"))
+}
+
+func newErrorEvent(msg string) errorEvent {
+	file, line, funcName := captureCaller()
+	fingerprint := fmt.Sprintf("%s:%d:%s", file, line, funcName)
+
+	return errorEvent{
+		Fingerprint: fingerprint,
+		File:        file,
+		Line:        line,
+		FuncName:    funcName,
+		Message:     msg,
+	}
+}
+
+func captureCaller() (file string, line int, funcName string) {
+	const maxDepth = 16
+	pcs := make([]uintptr, maxDepth)
+	n := runtime.Callers(3, pcs)
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if frame.Function == "" {
+			if !more {
+				break
+			}
+			continue
+		}
+
+		if !strings.Contains(frame.Function, "xutils/logutil") {
+			return filepath.Base(frame.File), frame.Line, frame.Function
+		}
+
+		if !more {
+			break
+		}
+	}
+
+	return "unknown", 0, "unknown"
 }
