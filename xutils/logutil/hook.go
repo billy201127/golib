@@ -188,7 +188,8 @@ func captureCaller() (file string, line int, funcName string) {
 			continue
 		}
 
-		if !strings.Contains(frame.Function, "xutils/logutil") {
+		// 跳过 logutil 自身以及日志库内部的调用栈，找到真正业务代码位置
+		if isBusinessFrame(frame.Function, frame.File) {
 			return filepath.Base(frame.File), frame.Line, frame.Function
 		}
 
@@ -198,4 +199,22 @@ func captureCaller() (file string, line int, funcName string) {
 	}
 
 	return "unknown", 0, "unknown"
+}
+
+// isBusinessFrame 判断当前帧是否为业务代码帧，而不是日志库/包装器自身
+func isBusinessFrame(function, file string) bool {
+	// 过滤本包
+	if strings.Contains(function, "xutils/logutil") {
+		return false
+	}
+
+	// 过滤 go-zero logx 相关调用（函数名或路径中包含 logx）
+	if strings.Contains(function, "logx.") || strings.Contains(function, "log.(*Logger)") {
+		return false
+	}
+	if strings.Contains(file, "/core/logx/") {
+		return false
+	}
+
+	return true
 }
