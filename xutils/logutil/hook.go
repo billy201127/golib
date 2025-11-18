@@ -71,8 +71,8 @@ func NewHookWriter(w io.Writer, config Config) *HookWriter {
 func (h *HookWriter) Write(p []byte) (n int, err error) {
 	msg := string(p)
 
-	// only error/fatal
-	if strings.Contains(msg, ` error `) {
+	// only error level logs
+	if isErrorLevelLog(msg) {
 		event := h.newErrorEvent(msg)
 		select {
 		case h.msgChan <- event:
@@ -183,6 +183,16 @@ func (h *HookWriter) newErrorEvent(msg string) errorEvent {
 		FuncName:    funcName,
 		Message:     msg,
 	}
+}
+
+func isErrorLevelLog(msg string) bool {
+	fields := strings.Fields(msg)
+	if len(fields) < 2 {
+		return false
+	}
+
+	level := strings.ToLower(fields[1])
+	return level == "error"
 }
 
 const (
