@@ -2,6 +2,7 @@ package xredis
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"strings"
@@ -17,6 +18,7 @@ type Config struct {
 	Addrs    []string
 	Password string
 	Prefix   string
+	UseTLS   bool `json:"UseTLS,optional"`
 }
 
 // var Cli redis.UniversalClient
@@ -26,10 +28,19 @@ const (
 )
 
 func Init(c *Config) redis.UniversalClient {
-	Cli := redis.NewUniversalClient(&redis.UniversalOptions{
+	options := &redis.UniversalOptions{
 		Addrs:    c.Addrs,
 		Password: c.Password,
-	})
+	}
+
+	if c.UseTLS {
+		options.TLSConfig = &tls.Config{
+			InsecureSkipVerify: true,
+			MinVersion:         tls.VersionTLS12,
+		}
+	}
+
+	Cli := redis.NewUniversalClient(options)
 
 	// because redis use the same, so all keys add the app prefix
 	Cli.AddHook(AppPrefixHook{Prefix: c.Prefix})
