@@ -77,5 +77,6 @@ type LogExtend struct {
 	SubAppID   string `json:"sub_app_id"`
 	RelatedTID string `json:"related_tid"`
 	RelatedUID string `json:"related_uid"`
+	Usage      string `json:"usage"`
 	Expand     string `json:"expand"`
 }
