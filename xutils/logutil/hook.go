@@ -167,7 +167,20 @@ func sendNotify(webhook, secret string, msgs []string) {
 		return
 	}
 
-	if err := robot.SendText(context.Background(), strings.Join(msgs, "\n")); err != nil {
+	content := strings.Join(msgs, "\n")
+	const maxSize = 20000
+
+	// 确保消息大小在 20000 字节以内
+	if len(content) > maxSize {
+		truncated := content[:maxSize]
+		// 尝试在最后一个换行符处截断，避免截断中间的消息
+		if lastNewline := strings.LastIndex(truncated, "\n"); lastNewline > maxSize/2 {
+			truncated = truncated[:lastNewline]
+		}
+		content = truncated + fmt.Sprintf("\n\n[msg truncated, original size: %d bytes]", len(content))
+	}
+
+	if err := robot.SendText(context.Background(), content); err != nil {
 		logx.Errorf("failed to send notify: %v", err)
 	}
 }
