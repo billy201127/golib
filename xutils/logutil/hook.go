@@ -2,7 +2,9 @@ package logutil
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"path/filepath"
 	"runtime"
@@ -14,6 +16,27 @@ import (
 	"gomod.pri/golib/notify"
 )
 
+const (
+	captureBaseSkip     = 3
+	defaultStackDepth   = 32
+	defaultIntervalSec  = 60
+	runtimePathSegment  = "/runtime/"
+	maxNotifyContentLen = 20000
+)
+
+var defaultSkipPrefixes = []string{
+	"gomod.pri/golib/xutils/logutil",
+	"github.com/zeromicro/go-zero/core/",
+	"golang.org/x/",
+}
+
+var defaultAllowPrefixes = []string{
+	"microloan",
+	"gomod.pri",
+}
+
+// HookWriter is an io.Writer implementation that aggregates error logs
+// and periodically sends summarized notifications.
 type HookWriter struct {
 	w        io.Writer
 	msgChan  chan errorEvent
@@ -21,6 +44,7 @@ type HookWriter struct {
 	records  map[string]*errorRecord
 	order    []string
 	mu       sync.Mutex
+	once     sync.Once
 	interval time.Duration
 	limit    int
 	config   Config
@@ -44,6 +68,7 @@ type errorRecord struct {
 	LastMessage string
 }
 
+// NewHookWriter creates a new HookWriter with the given config.
 func NewHookWriter(w io.Writer, config Config) *HookWriter {
 	filter := newFrameFilter()
 
@@ -64,25 +89,38 @@ func NewHookWriter(w io.Writer, config Config) *HookWriter {
 		filter:   filter,
 	}
 
+	// Ensure background goroutine can be reclaimed if HookWriter is GC'ed.
+	runtime.SetFinalizer(hw, func(h *HookWriter) {
+		h.Close()
+	})
+
 	go hw.runNotifier()
+
 	return hw
 }
 
+// Write implements io.Writer and intercepts error-level logs to aggregate them.
 func (h *HookWriter) Write(p []byte) (n int, err error) {
 	msg := string(p)
 
-	// only error level logs
 	if isErrorLevelLog(msg) {
 		event := h.newErrorEvent(msg)
 		select {
 		case h.msgChan <- event:
 		default:
-			// channel full , drop msg
+			// channel full, drop msg
 			logx.Infof("notify channel full, drop msg")
 		}
 	}
 
 	return h.w.Write(p)
+}
+
+// Close stops the background notifier goroutine.
+func (h *HookWriter) Close() {
+	h.once.Do(func() {
+		close(h.quit)
+	})
 }
 
 func (h *HookWriter) runNotifier() {
@@ -92,21 +130,7 @@ func (h *HookWriter) runNotifier() {
 	for {
 		select {
 		case event := <-h.msgChan:
-			h.mu.Lock()
-			record, ok := h.records[event.Fingerprint]
-			if !ok {
-				record = &errorRecord{
-					Fingerprint: event.Fingerprint,
-					File:        event.File,
-					Line:        event.Line,
-					FuncName:    event.FuncName,
-				}
-				h.records[event.Fingerprint] = record
-				h.order = append(h.order, event.Fingerprint)
-			}
-			record.Count++
-			record.LastMessage = event.Message
-			h.mu.Unlock()
+			h.handleEvent(event)
 
 		case <-ticker.C:
 			h.flush()
@@ -116,6 +140,26 @@ func (h *HookWriter) runNotifier() {
 			return
 		}
 	}
+}
+
+func (h *HookWriter) handleEvent(event errorEvent) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	record, ok := h.records[event.Fingerprint]
+	if !ok {
+		record = &errorRecord{
+			Fingerprint: event.Fingerprint,
+			File:        event.File,
+			Line:        event.Line,
+			FuncName:    event.FuncName,
+		}
+		h.records[event.Fingerprint] = record
+		h.order = append(h.order, event.Fingerprint)
+	}
+
+	record.Count++
+	record.LastMessage = event.Message
 }
 
 func (h *HookWriter) flush() {
@@ -128,9 +172,12 @@ func (h *HookWriter) flush() {
 
 	var summaries []string
 	total := len(h.order)
+
 	for i, fingerprint := range h.order {
 		if i >= h.limit {
-			summaries = append(summaries, fmt.Sprintf("... skipped %d more error fingerprints", total-h.limit))
+			summaries = append(summaries,
+				fmt.Sprintf("... skipped %d more error fingerprints", total-h.limit),
+			)
 			break
 		}
 
@@ -138,10 +185,20 @@ func (h *HookWriter) flush() {
 		if record == nil {
 			continue
 		}
-		summaries = append(summaries, fmt.Sprintf("[count: %d] %s:%d %s\n%s", record.Count, record.File, record.Line, record.FuncName, strings.TrimSpace(record.LastMessage)))
+
+		summaries = append(
+			summaries,
+			fmt.Sprintf(
+				"[count: %d] %s:%d %s\n%s",
+				record.Count,
+				record.File,
+				record.Line,
+				record.FuncName,
+				strings.TrimSpace(record.LastMessage),
+			),
+		)
 	}
 
-	// batch send
 	sendNotify(h.config.NotifyWebhook, h.config.NotifySecret, summaries)
 
 	// clear buffer
@@ -149,45 +206,10 @@ func (h *HookWriter) flush() {
 	h.order = make([]string, 0)
 }
 
-func (h *HookWriter) Close() {
-	close(h.quit)
-}
-
-func sendNotify(webhook, secret string, msgs []string) {
-	robot, err := notify.NewNotification(notify.NotificationConfig{
-		Type: notify.DingTalk,
-		Config: notify.Config{
-			Webhook: webhook,
-			Secret:  secret,
-		},
-	})
-
-	if err != nil {
-		logx.Errorf("failed to create robot: %v", err)
-		return
-	}
-
-	content := strings.Join(msgs, "\n")
-	const maxSize = 20000
-
-	// 确保消息大小在 20000 字节以内
-	if len(content) > maxSize {
-		truncated := content[:maxSize]
-		// 尝试在最后一个换行符处截断，避免截断中间的消息
-		if lastNewline := strings.LastIndex(truncated, "\n"); lastNewline > maxSize/2 {
-			truncated = truncated[:lastNewline]
-		}
-		content = truncated + fmt.Sprintf("\n\n[msg truncated, original size: %d bytes]", len(content))
-	}
-
-	if err := robot.SendText(context.Background(), content); err != nil {
-		logx.Errorf("failed to send notify: %v", err)
-	}
-}
-
 func (h *HookWriter) newErrorEvent(msg string) errorEvent {
 	file, line, funcName := h.filter.captureCaller()
-	fingerprint := fmt.Sprintf("%s:%d:%s", file, line, funcName)
+	hash := hashMessage(msg)
+	fingerprint := fmt.Sprintf("%s:%d:%s:%s", file, line, funcName, hash)
 
 	return errorEvent{
 		Fingerprint: fingerprint,
@@ -198,24 +220,69 @@ func (h *HookWriter) newErrorEvent(msg string) errorEvent {
 	}
 }
 
-func isErrorLevelLog(msg string) bool {
-	fields := strings.Fields(msg)
-	if len(fields) < 2 {
-		return false
+// sendNotify sends aggregated error summaries to the configured webhook.
+func sendNotify(webhook, secret string, msgs []string) {
+	robot, err := notify.NewNotification(notify.NotificationConfig{
+		Type: notify.DingTalk,
+		Config: notify.Config{
+			Webhook: webhook,
+			Secret:  secret,
+		},
+	})
+	if err != nil {
+		logx.Errorf("failed to create robot: %v", err)
+		return
 	}
 
-	level := strings.ToLower(fields[1])
-	return level == "error"
+	content := strings.Join(msgs, "\n")
+
+	// Ensure message size is within DingTalk's 20KB limit.
+	if len(content) > maxNotifyContentLen {
+		truncated := content[:maxNotifyContentLen]
+
+		// Try to cut on the last newline to avoid breaking messages.
+		if lastNewline := strings.LastIndex(truncated, "\n"); lastNewline > maxNotifyContentLen/2 {
+			truncated = truncated[:lastNewline]
+		}
+
+		content = truncated + fmt.Sprintf(
+			"\n\n[msg truncated, original size: %d bytes]",
+			len(content),
+		)
+	}
+
+	if err := robot.SendText(context.Background(), content); err != nil {
+		logx.Errorf("failed to send notify: %v", err)
+	}
 }
 
-const (
-	captureBaseSkip    = 3
-	defaultStackDepth  = 32
-	defaultAutoSkip    = 4
-	defaultIntervalSec = 60
-	runtimePathSegment = "/runtime/"
-)
+// isErrorLevelLog determines whether the log message should be treated as an error.
+func isErrorLevelLog(msg string) bool {
+	lower := strings.ToLower(msg)
 
+	// structured logs like: {"level":"error", ...}
+	if strings.Contains(lower, `"level":"error"`) {
+		return true
+	}
+	if strings.Contains(lower, " level=error") {
+		return true
+	}
+
+	// fallback: second field as level (e.g. "2025-01-01T00:00:00Z error ...")
+	fields := strings.Fields(msg)
+	if len(fields) >= 2 {
+		level := strings.Trim(fields[1], "[]")
+		level = strings.ToLower(level)
+		switch level {
+		case "error", "err", "erro":
+			return true
+		}
+	}
+
+	return false
+}
+
+// frameFilter decides which stack frame is considered the "business" caller.
 type frameFilter struct {
 	allowPrefixes []string
 	skipPrefixes  []string
@@ -234,21 +301,11 @@ func newFrameFilter() *frameFilter {
 	return filter
 }
 
-var defaultSkipPrefixes = []string{
-	"gomod.pri/golib/xutils/logutil",
-	"github.com/zeromicro/go-zero/core/",
-	"golang.org/x/",
-}
-
-var defaultAllowPrefixes = []string{
-	"microloan",
-	"gomod.pri",
-}
-
 func (f *frameFilter) captureCaller() (file string, line int, funcName string) {
 	pcs := make([]uintptr, defaultStackDepth)
-	skip := captureBaseSkip + defaultAutoSkip
-	n := runtime.Callers(skip, pcs)
+
+	// Start from a minimal base skip; business-frame filtering will handle library frames.
+	n := runtime.Callers(captureBaseSkip, pcs)
 	if n == 0 {
 		return "unknown", 0, "unknown"
 	}
@@ -274,15 +331,19 @@ func (f *frameFilter) isBusinessFrame(function, file string) bool {
 		return false
 	}
 
-	if len(f.allowPrefixes) > 0 && (hasAnyPrefix(function, f.allowPrefixes) || hasAnyPrefix(file, f.allowPrefixes)) {
-		return true
-	}
-
-	if strings.Contains(file, runtimePathSegment) {
+	// skip has higher priority than allow
+	if hasAnyPrefix(function, f.skipPrefixes) || hasAnyPrefix(file, f.skipPrefixes) {
 		return false
 	}
 
-	if hasAnyPrefix(function, f.skipPrefixes) || hasAnyPrefix(file, f.skipPrefixes) {
+	// explicit allow for business packages
+	if len(f.allowPrefixes) > 0 &&
+		(hasAnyPrefix(function, f.allowPrefixes) || hasAnyPrefix(file, f.allowPrefixes)) {
+		return true
+	}
+
+	// filter out runtime first
+	if strings.Contains(file, runtimePathSegment) {
 		return false
 	}
 
@@ -302,6 +363,7 @@ func hasAnyPrefix(target string, prefixes []string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -312,5 +374,15 @@ func isStdLibFile(file string) bool {
 	}
 
 	src := filepath.Join(goroot, "src")
+
 	return strings.HasPrefix(file, src)
+}
+
+func hashMessage(msg string) string {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(msg))
+	sum := h.Sum(nil)
+
+	// shorter hex to keep fingerprint compact
+	return hex.EncodeToString(sum)
 }

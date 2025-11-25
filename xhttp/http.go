@@ -145,7 +145,13 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 		req.Context(),
 		spanName,
 		oteltrace.WithSpanKind(oteltrace.SpanKindClient),
-		oteltrace.WithAttributes(safeHTTPClientAttributesFromHTTPRequest(req)...),
+	)
+
+	span.SetAttributes(
+		attribute.String("http.method", req.Method),
+		attribute.String("http.scheme", req.URL.Scheme),
+		attribute.String("http.host", req.URL.Host),
+		attribute.String("http.path", req.URL.Path),
 	)
 	defer span.End()
 
@@ -244,30 +250,4 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 // GetClient 获取原始的http.Client
 func (c *Client) GetClient() *http.Client {
 	return c.client
-}
-
-func safeHTTPClientAttributesFromHTTPRequest(request *http.Request) []attribute.KeyValue {
-	return truncateAttributeValues(semconv.HTTPClientAttributesFromHTTPRequest(request))
-}
-
-func truncateAttributeValues(attrs []attribute.KeyValue) []attribute.KeyValue {
-	if len(attrs) == 0 {
-		return attrs
-	}
-
-	trimmed := make([]attribute.KeyValue, 0, len(attrs))
-	for _, kv := range attrs {
-		if kv.Value.Type() != attribute.STRING {
-			trimmed = append(trimmed, kv)
-			continue
-		}
-
-		val := kv.Value.AsString()
-		if len(val) > maxAttributeStringLen {
-			val = val[:maxAttributeStringLen]
-		}
-		trimmed = append(trimmed, kv.Key.String(val))
-	}
-
-	return trimmed
 }
