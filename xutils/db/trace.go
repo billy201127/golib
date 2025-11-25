@@ -14,6 +14,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.30.0"
 )
 
+const maxSQLLength = 1024 * 1024 // 1 MB limit for traced SQL text
+
 var (
 	driverName string
 	once       sync.Once
@@ -70,6 +72,9 @@ func GetDB(dsn string) sqlx.SqlConn {
 // buildCompleteSQL builds a complete SQL statement by replacing placeholders with actual values
 func buildCompleteSQL(query string, args []driver.NamedValue) string {
 	if len(args) == 0 {
+		if len(query) > maxSQLLength {
+			return query[:maxSQLLength] + fmt.Sprintf(" [SQL truncated, original length: %d bytes]", len(query))
+		}
 		return query
 	}
 
@@ -108,5 +113,8 @@ func buildCompleteSQL(query string, args []driver.NamedValue) string {
 		}
 	}
 
+	if len(completeSQL) > maxSQLLength {
+		return completeSQL[:maxSQLLength] + fmt.Sprintf(" [SQL truncated, original length: %d bytes]", len(completeSQL))
+	}
 	return completeSQL
 }
