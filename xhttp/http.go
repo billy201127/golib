@@ -14,11 +14,14 @@ import (
 
 	"github.com/zeromicro/go-zero/core/trace"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
+
+const maxAttributeStringLen = 1024 * 1024 // 1 MiB cap to keep telemetry payloads reasonable
 
 // DefaultTransport 默认的HTTP传输配置
 var DefaultTransport = &http.Transport{
@@ -142,7 +145,7 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 		req.Context(),
 		spanName,
 		oteltrace.WithSpanKind(oteltrace.SpanKindClient),
-		oteltrace.WithAttributes(semconv.HTTPClientAttributesFromHTTPRequest(req)...),
+		oteltrace.WithAttributes(safeHTTPClientAttributesFromHTTPRequest(req)...),
 	)
 	defer span.End()
 
@@ -241,4 +244,30 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 // GetClient 获取原始的http.Client
 func (c *Client) GetClient() *http.Client {
 	return c.client
+}
+
+func safeHTTPClientAttributesFromHTTPRequest(request *http.Request) []attribute.KeyValue {
+	return truncateAttributeValues(semconv.HTTPClientAttributesFromHTTPRequest(request))
+}
+
+func truncateAttributeValues(attrs []attribute.KeyValue) []attribute.KeyValue {
+	if len(attrs) == 0 {
+		return attrs
+	}
+
+	trimmed := make([]attribute.KeyValue, 0, len(attrs))
+	for _, kv := range attrs {
+		if kv.Value.Type() != attribute.STRING {
+			trimmed = append(trimmed, kv)
+			continue
+		}
+
+		val := kv.Value.AsString()
+		if len(val) > maxAttributeStringLen {
+			val = val[:maxAttributeStringLen]
+		}
+		trimmed = append(trimmed, kv.Key.String(val))
+	}
+
+	return trimmed
 }
