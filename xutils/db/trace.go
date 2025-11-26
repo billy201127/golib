@@ -14,7 +14,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.30.0"
 )
 
-const maxSQLLength = 64 * 1024 // 64 KB limit for traced SQL text
+const maxSQLLength = 63 * 1024 // 63 KB limit for traced SQL text
 
 var (
 	driverName string
