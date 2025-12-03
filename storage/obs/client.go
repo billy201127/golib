@@ -94,6 +94,7 @@ func (c *Client) DownloadStream(ctx context.Context, remote string) (io.ReadClos
 	output, err := c.obsClient.GetObject(input)
 	if err != nil {
 		logc.Errorf(ctx, "Download file error, errMsg: %s", err.Error())
+		return nil, err
 	}
 
 	return output.Body, err

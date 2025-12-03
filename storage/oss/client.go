@@ -77,6 +77,7 @@ func (c *Client) DownloadStream(ctx context.Context, remote string) (io.ReadClos
 	result, err := c.ossClient.GetObject(ctx, request)
 	if err != nil {
 		logc.Errorf(ctx, "Download stream error, errMsg: %s", err.Error())
+		return nil, err
 	}
 
 	return result.Body, err
@@ -89,6 +90,7 @@ func (c *Client) SignUrl(ctx context.Context, remote string, expires int) (strin
 	}, oss.PresignExpires(time.Second*time.Duration(expires)))
 	if err != nil {
 		logc.Errorf(ctx, "Sign url error, errMsg: %s", err.Error())
+		return "", err
 	}
 
 	if req.URL == "" {
