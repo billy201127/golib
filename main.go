@@ -1,43 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"time"
 
-	"github.com/goccy/go-yaml"
-	"gomod.pri/golib/apollo"
+	"gomod.pri/golib/xutils/watermark"
 )
 
 func main() {
-	client, err := apollo.NewClient(&apollo.Config{
-		AppID:        "Debt",
-		Cluster:      "default",
-		Addr:         "http://config.apollo.host:8080",
-		PrivateSpace: "test.yaml",
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	content := client.Private.GetContent()
-	fmt.Println(content)
-
-	var config DebtConfig
-	err = yaml.Unmarshal([]byte(content), &config)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println(config)
-}
-
-type DebtConfig struct {
-	LogHook Config
-}
-
-type Config struct {
-	IntervalSec    int64  `yaml:"IntervalSec"`
-	Limit          int    `yaml:"Limit"`
-	DisableStmtLog bool   `yaml:"DisableStmtLog"`
-	NotifyWebhook  string `yaml:"NotifyWebhook"`
-	NotifySecret   string `yaml:"NotifySecret"`
+	now := time.Now()
+	watermark.Add(context.Background(), "https://allproject-test-oss.oss-ap-southeast-1.aliyuncs.com/Sahara/input/6b/d2eb/6bd2ebb6551d789a8d0e05856ab0bdbd.jpg?x-oss-credential=LTAI5tPGy5cmCzrCd2H8i7eR%2F20251203%2Fap-southeast-1%2Foss%2Faliyun_v4_request&x-oss-date=20251203T125019Z&x-oss-expires=1800&x-oss-signature=6c506b4a324d29b7a1d2585777a4d41add63502f1b955e1769afe9bd22c8eceb&x-oss-signature-version=OSS4-HMAC-SHA256", "testtest")
+	fmt.Println(time.Since(now))
 }
