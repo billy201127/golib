@@ -238,7 +238,7 @@ func sendNotify(webhook, secret string, msgs []string) {
 
 	// Format messages into Markdown for better readability.
 	var sb strings.Builder
-	sb.WriteString("### Summary of Errors\n")
+	sb.WriteString("### Error Summaries\n")
 	for _, msg := range msgs {
 		title, body := formatLogMessageParts(msg)
 		sb.WriteString("- ")
