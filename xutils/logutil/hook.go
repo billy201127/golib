@@ -3,11 +3,13 @@ package logutil
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"io"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -234,7 +236,22 @@ func sendNotify(webhook, secret string, msgs []string) {
 		return
 	}
 
-	content := strings.Join(msgs, "\n")
+	// Format messages into Markdown for better readability.
+	var sb strings.Builder
+	sb.WriteString("### Summary of Errors\n")
+	for _, msg := range msgs {
+		title, body := formatLogMessageParts(msg)
+		sb.WriteString("- ")
+		if title != "" {
+			sb.WriteString(title)
+		} else {
+			sb.WriteString("Log")
+		}
+		sb.WriteString(":\n```\n")
+		sb.WriteString(body)
+		sb.WriteString("\n```\n")
+	}
+	content := sb.String()
 
 	// Ensure message size is within DingTalk's 20KB limit.
 	if len(content) > maxNotifyContentLen {
@@ -251,8 +268,92 @@ func sendNotify(webhook, secret string, msgs []string) {
 		)
 	}
 
-	if err := robot.SendText(context.Background(), content); err != nil {
-		logx.Errorf("failed to send notify: %v", err)
+	if err := robot.SendCard(context.Background(), "Error Alert", content); err != nil {
+		logx.Errorf("failed to send notify (markdown card), fallback to text: %v", err)
+	}
+}
+
+// formatLogMessageParts returns (title, body). Title is the non-JSON prefix (e.g., "[count: 1] ..."),
+// body is the formatted key: val lines. If no prefix, title is empty.
+// Supports mixed content like "[count: 1] ...\n{...json...}".
+func formatLogMessageParts(s string) (string, string) {
+	s = strings.TrimSpace(s)
+
+	// Case 1: entire string is JSON
+	if formatted, ok := tryFormatJSONLines(s); ok {
+		return "", formatted
+	}
+
+	// Case 2: find first '{' and last '}' and try to format that segment
+	start := strings.Index(s, "{")
+	end := strings.LastIndex(s, "}")
+	if start >= 0 && end > start {
+		jsonPart := s[start : end+1]
+		if formatted, ok := tryFormatJSONLines(jsonPart); ok {
+			head := strings.TrimSpace(s[:start])
+			if head != "" {
+				return head, formatted
+			}
+			return "", formatted
+		}
+	}
+
+	// Fallback: return original
+	return "", s
+}
+
+// tryFormatJSON attempts to pretty print JSON log content.
+// Returns "key: val" lines (no braces) and true if successful; otherwise "", false.
+func tryFormatJSONLines(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "{") || !strings.HasSuffix(s, "}") {
+		return "", false
+	}
+	var obj map[string]interface{}
+	if err := json.Unmarshal([]byte(s), &obj); err != nil {
+		return "", false
+	}
+	return formatMapKeyVal(obj), true
+}
+
+// formatMapKeyVal renders map as "key: val" lines without braces, sorted by key.
+func formatMapKeyVal(m map[string]interface{}) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var sb strings.Builder
+	for i, k := range keys {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		sb.WriteString("**")
+		sb.WriteString(k)
+		sb.WriteString("**")
+		sb.WriteString(": ")
+		sb.WriteString(stringifyVal(m[k]))
+	}
+	return sb.String()
+}
+
+// stringifyVal converts interface{} to compact string.
+func stringifyVal(v interface{}) string {
+	switch vv := v.(type) {
+	case string:
+		return vv
+	case float64, bool, int, int64, uint64, json.Number:
+		return fmt.Sprint(vv)
+	case []interface{}, map[string]interface{}:
+		// For nested structures, keep it compact JSON
+		b, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprint(v)
+		}
+		return string(b)
+	default:
+		return fmt.Sprint(v)
 	}
 }
 
