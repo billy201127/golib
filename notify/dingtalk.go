@@ -102,6 +102,9 @@ func (d *DingTalkNotification) sendDingTalkTextMsg(ctx context.Context, content 
 
 // 发送markdown格式钉钉消息
 func (d *DingTalkNotification) sendDingTalkMarkdownMsg(ctx context.Context, title, content string, isAtAll bool) (err error) {
+	hostname, _ := os.Hostname()
+	content = fmt.Sprintf("hostname: [ %s ]\n%s", hostname, content)
+
 	msg := &Dmarkdown{}
 	msg.Msgtype = "markdown"
 	msg.Markdown.Title = title
