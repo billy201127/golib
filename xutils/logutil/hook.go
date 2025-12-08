@@ -202,7 +202,7 @@ func (h *HookWriter) buildSummaries() []string {
 		}
 
 		summary := fmt.Sprintf(
-			"[count: %d] %s:%d %s\n%s",
+			"[%d] %s:%d\n%s\n%s",
 			record.Count,
 			record.File,
 			record.Line,
