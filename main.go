@@ -36,7 +36,7 @@ func main() {
 	logx.MustSetup(logx.LogConf{
 		ServiceName: "test",
 		Mode:        "console",
-		Encoding:    "json",
+		Encoding:    "plain",
 		Level:       "debug",
 		Compress:    false,
 		Stat:        false,
