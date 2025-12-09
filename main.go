@@ -36,7 +36,7 @@ func main() {
 	logx.MustSetup(logx.LogConf{
 		ServiceName: "test",
 		Mode:        "console",
-		Encoding:    "plain",
+		Encoding:    "json",
 		Level:       "debug",
 		Compress:    false,
 		Stat:        false,
@@ -46,8 +46,9 @@ func main() {
 		IntervalSec:    1,
 		Limit:          10,
 		DisableStmtLog: false,
-		NotifyWebhook:  "https://oapi.dingtalk.com/robot/send?access_token=bafacc990f3c25c324f7faae7e095adb4054fe254c15bc8e5f48732591e130df",
-		NotifySecret:   "SECa0c8a83a2c2e3c4f3080ba1f5fcd855d24b7fa8e2cf5434463162eed66a21a7c",
+		NotifyChannel:  "feishu",
+		NotifyWebhook:  "",
+		NotifySecret:   "",
 	})
 
 	logx.SetWriter(logx.NewWriter(hookWriter))

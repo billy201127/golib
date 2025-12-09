@@ -256,7 +256,7 @@ func sendNotify(channel, webhook, secret string, msgs []string) {
 	}
 
 	if hasJSONFormat(msgs) {
-		sendJSONNotification(robot, msgs)
+		sendJSONNotification(robot, msgs, notifyChannel)
 	} else {
 		sendPlainNotification(robot, msgs)
 	}
@@ -273,7 +273,7 @@ func hasJSONFormat(msgs []string) bool {
 }
 
 // sendJSONNotification sends notifications in markdown card format for JSON logs.
-func sendJSONNotification(robot notify.Notification, msgs []string) {
+func sendJSONNotification(robot notify.Notification, msgs []string, channel notify.NotificationType) {
 	var sb strings.Builder
 	sb.Grow(len(msgs) * 200) // Pre-allocate buffer
 
@@ -290,8 +290,13 @@ func sendJSONNotification(robot notify.Notification, msgs []string) {
 		sb.WriteString("\n```\n")
 	}
 
+	content := strings.TrimRight(sb.String(), "\n")
+	// Feishu不支持这种**加粗**格式，移除防止显示成原始符号
+	if channel == notify.Feishu {
+		content = strings.ReplaceAll(content, "**", "")
+	}
 	// Trim trailing newlines to avoid rendering lots of blank lines in markdown
-	content := truncateContent(strings.TrimRight(sb.String(), "\n"))
+	content = truncateContent(content)
 	if err := robot.SendCard(context.Background(), "Error Alert", content); err != nil {
 		logx.Errorf("[sendNotify] failed to send markdown card: %v", err)
 	}
