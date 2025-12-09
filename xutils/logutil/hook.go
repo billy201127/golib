@@ -293,7 +293,8 @@ func sendJSONNotification(robot notify.Notification, msgs []string) {
 		sb.WriteString("\n```\n")
 	}
 
-	content := truncateContent(sb.String())
+	// Trim trailing newlines to avoid rendering lots of blank lines in markdown
+	content := truncateContent(strings.TrimRight(sb.String(), "\n"))
 	if err := robot.SendCard(context.Background(), "Error Alert", content); err != nil {
 		logx.Errorf("[sendNotify] failed to send markdown card: %v", err)
 	}
