@@ -177,7 +177,7 @@ func (h *HookWriter) flush() {
 	}
 
 	summaries := h.buildSummaries()
-	sendNotify(h.config.NotifyWebhook, h.config.NotifySecret, summaries)
+	sendNotify(h.config.NotifyChannel, h.config.NotifyWebhook, h.config.NotifySecret, summaries)
 
 	// Clear buffer
 	h.records = make(map[string]*errorRecord)
@@ -231,13 +231,23 @@ func (h *HookWriter) newErrorEvent(msg string) errorEvent {
 
 // sendNotify sends aggregated error summaries to the configured webhook.
 // It automatically detects JSON vs plain text format and uses appropriate notification method.
-func sendNotify(webhook, secret string, msgs []string) {
+func sendNotify(channel, webhook, secret string, msgs []string) {
 	if len(msgs) == 0 {
 		return
 	}
 
+	var notifyChannel notify.NotificationType
+	switch channel {
+	case "dingtalk":
+		notifyChannel = notify.DingTalk
+	case "feishu":
+		notifyChannel = notify.Feishu
+	default:
+		notifyChannel = notify.DingTalk
+	}
+
 	robot, err := notify.NewNotification(notify.NotificationConfig{
-		Type: notify.DingTalk,
+		Type: notifyChannel,
 		Config: notify.Config{
 			Webhook: webhook,
 			Secret:  secret,
