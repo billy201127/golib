@@ -2,10 +2,8 @@ package logutil
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"io"
 	"path/filepath"
 	"runtime"
@@ -217,8 +215,7 @@ func (h *HookWriter) buildSummaries() []string {
 
 func (h *HookWriter) newErrorEvent(msg string) errorEvent {
 	file, line, funcName := h.filter.captureCaller()
-	hash := hashMessage(msg)
-	fingerprint := fmt.Sprintf("%s:%d:%s:%s", file, line, funcName, hash)
+	fingerprint := fmt.Sprintf("%s:%d:%s", file, line, funcName)
 
 	return errorEvent{
 		Fingerprint: fingerprint,
@@ -678,12 +675,6 @@ func isStdLibFile(file string) bool {
 
 	src := filepath.Join(goroot, "src")
 	return strings.HasPrefix(file, src)
-}
-
-func hashMessage(msg string) string {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(msg))
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 func min(a, b int) int {

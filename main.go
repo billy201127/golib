@@ -55,6 +55,10 @@ func main() {
 	logx.Error("mervyn test")
 	logx.Error("mervyn test01")
 
+	Terror()
+	Terror()
+	Terror()
+
 	// 使用goroutine来触发panic，避免主程序退出
 	go func() {
 		defer func() {
@@ -71,4 +75,8 @@ func main() {
 	fmt.Println("程序继续运行，等待20秒...")
 	time.Sleep(20 * time.Second)
 	fmt.Println("程序正常退出")
+}
+
+func Terror() {
+	logx.Errorf("mervyn test04: %s", "test")
 }
