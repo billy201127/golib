@@ -5,6 +5,13 @@ import (
 	"fmt"
 )
 
+func NewNotifyError(provider int, err error) error {
+	return &NotifyError{
+		Provider: provider,
+		ErrMsg:   err.Error(),
+	}
+}
+
 type NotifyError struct {
 	Provider int
 	ErrMsg   string
