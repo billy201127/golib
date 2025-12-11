@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func NewNotifyError(provider int, err error) error {
+func NewNotifyError(provider int, err error) *NotifyError {
 	return &NotifyError{
 		Provider: provider,
 		ErrMsg:   err.Error(),
