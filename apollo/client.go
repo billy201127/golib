@@ -2,6 +2,7 @@ package apollo
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/apolloconfig/agollo/v4"
 	"github.com/apolloconfig/agollo/v4/env/config"
@@ -20,6 +21,11 @@ type Client struct {
 	client  *agollo.Client
 	Default *storage.Config // application namespace
 	Private *storage.Config // private namespace
+}
+
+func (c *Client) GetPrivateJson() []byte {
+	content := strings.TrimPrefix(c.Private.GetContent(), "content=")
+	return []byte(content)
 }
 
 // AddChangeListener 向已存在的客户端添加新的配置变更监听器
