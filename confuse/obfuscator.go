@@ -3,6 +3,7 @@ package confuse
 import (
 	"sort"
 	"strings"
+	"sync"
 )
 
 // ============================================================================
@@ -16,6 +17,11 @@ const (
 	charsetDigit = "0123456789"
 )
 
+var (
+	// sdkCache caches ObfuscatorSDK instances by seed to avoid reloading dictionary
+	sdkCache sync.Map // map[int]*ObfuscatorSDK
+)
+
 type ObfuscatorSDK struct {
 	dictionary       []string
 	seed             int
@@ -24,13 +30,23 @@ type ObfuscatorSDK struct {
 
 // NewObfuscatorSDK creates a new obfuscator SDK instance with embedded dictionary
 // By default, out-of-dictionary words will be encrypted using character-level encryption
+// SDK instances are cached by seed to avoid reloading dictionary data
 func NewObfuscatorSDK(seed int) *ObfuscatorSDK {
+	// Try to load from cache first
+	if cached, ok := sdkCache.Load(seed); ok {
+		return cached.(*ObfuscatorSDK)
+	}
+
+	// Create new SDK instance
 	sdk := &ObfuscatorSDK{
 		seed:             seed,
 		encryptOutOfDict: true, // default: encrypt out-of-dictionary words
 	}
 	sdk.loadEmbeddedDictionary()
-	return sdk
+
+	// Store in cache, or return existing if another goroutine stored it first
+	actual, _ := sdkCache.LoadOrStore(seed, sdk)
+	return actual.(*ObfuscatorSDK)
 }
 
 // SetEncryptOutOfDict sets whether to encrypt out-of-dictionary words
