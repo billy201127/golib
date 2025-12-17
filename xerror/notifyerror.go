@@ -5,31 +5,40 @@ import (
 	"fmt"
 )
 
-func NewNotifyError(provider int, err error) *NotifyError {
-	return &NotifyError{
+func NewProviderError(provider int, err error) error {
+	return &ProviderError{
 		Provider: provider,
-		ErrMsg:   err.Error(),
+		Err:      err,
 	}
 }
 
-type NotifyError struct {
+type ProviderError struct {
 	Provider int
-	ErrMsg   string
+	Err      error
 }
 
-func (e *NotifyError) Error() string {
-	return fmt.Sprintf("provider: %d, err_msg: %s", e.Provider, e.ErrMsg)
+func (e *ProviderError) Error() string {
+	return fmt.Sprintf("provider=%d: %v", e.Provider, e.Err)
 }
 
-func (e *NotifyError) Wrap(err error) error {
-	e.ErrMsg = err.Error()
-	return e
+func (e *ProviderError) Unwrap() error {
+	return e.Err
 }
 
-func GetNotifyProvider(err error) int {
-	var ne *NotifyError
-	if errors.As(err, &ne) {
-		return ne.Provider
+func WrapProviderError(provider int, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &ProviderError{
+		Provider: provider,
+		Err:      err,
+	}
+}
+
+func GetProvider(err error) int {
+	var pe *ProviderError
+	if errors.As(err, &pe) {
+		return pe.Provider
 	}
 	return 0
 }
