@@ -53,13 +53,21 @@ func smartDecode(r io.Reader, contentType string) (image.Image, string, error) {
 	return nil, "", err
 }
 
+func AddFromBytes(ctx context.Context, body []byte, text string) (io.ReadCloser, error) {
+	smarIm, format, err := smartDecode(bytes.NewBuffer(body), "")
+	if err != nil {
+		logc.Errorf(ctx, "AddWatermark decode image failed, err: %v", err)
+		return nil, err
+	}
+	return draw(ctx, smarIm, format, text)
+}
+
 func Add(ctx context.Context, uri string, watermarkText string) (io.ReadCloser, error) {
 	const fontSize = 48
 
 	var (
 		im     image.Image
 		format string
-		err    error
 	)
 
 	// ---------- 1. 加载图片 ----------
@@ -92,6 +100,16 @@ func Add(ctx context.Context, uri string, watermarkText string) (io.ReadCloser, 
 			format = "jpeg"
 		}
 	}
+
+	return draw(ctx, im, format, watermarkText)
+}
+
+func draw(ctx context.Context, im image.Image, format string, watermarkText string) (io.ReadCloser, error) {
+	const fontSize = 48
+
+	var (
+		err error
+	)
 
 	// ---------- 2. 绘制水印 ----------
 	w := im.Bounds().Dx()

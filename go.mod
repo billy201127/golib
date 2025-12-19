@@ -16,6 +16,7 @@ require (
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/davidbyttow/govips/v2 v2.16.0
 	github.com/disintegration/imaging v1.6.2
+	github.com/fogleman/gg v1.3.0
 	github.com/go-playground/locales v0.14.0
 	github.com/go-playground/universal-translator v0.18.0
 	github.com/go-playground/validator/v10 v10.11.0

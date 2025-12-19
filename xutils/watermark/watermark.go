@@ -24,6 +24,7 @@ import (
 )
 
 type Config struct {
+	ImageBody         []byte
 	InputPath         string
 	WatermarkText     string
 	MaxWidth          int
@@ -40,6 +41,26 @@ var (
 	vipsInitOnce  sync.Once
 	wmLRU         = newWatermarkLRU(128)
 )
+
+func AddFromBytes(ctx context.Context, body []byte, text string) (io.ReadCloser, error) {
+	cfg := Config{
+		ImageBody:         body,
+		WatermarkText:     text,
+		MaxWidth:          2000,
+		Quality:           85,
+		TileSpacingFactor: 1.4,
+		MinTileStep:       140,
+		Alpha:             50,
+	}
+
+	outputBytes, err := applyWatermark(cfg)
+	if err != nil {
+		logc.Errorf(ctx, "applyWatermark error: %v", err)
+		return nil, err
+	}
+
+	return io.NopCloser(bytes.NewReader(outputBytes)), nil
+}
 
 func Add(ctx context.Context, path string, text string) (io.ReadCloser, error) {
 	cfg := Config{
@@ -134,6 +155,10 @@ func applyWatermark(cfg Config) ([]byte, error) {
 }
 
 func loadBaseImage(cfg Config) (*vips.ImageRef, error) {
+	if len(cfg.ImageBody) > 0 {
+		return vips.NewImageFromBuffer(cfg.ImageBody)
+	}
+
 	if strings.HasPrefix(cfg.InputPath, "http://") || strings.HasPrefix(cfg.InputPath, "https://") {
 		data, err := fetchRemote(cfg.InputPath)
 		if err != nil {
