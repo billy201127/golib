@@ -120,12 +120,13 @@ func (c *Consumer[T]) Start() {
 		}()
 	}
 
-	c.wg.Wait()
+	// c.wg.Wait()
 }
 
 func (c *Consumer[T]) Stop() {
 	close(c.done)
 	_ = c.consumer.GracefulStop()
+	c.wg.Wait()
 }
 
 func (c *Consumer[T]) consume() {
