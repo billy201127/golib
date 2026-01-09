@@ -71,12 +71,13 @@ func (l *RequestResponseLog) ToJSON() ([]byte, error) {
 
 // LogExtend 扩展日志信息
 type LogExtend struct {
-	Supplier   int    `json:"supplier"`
-	TraceID    string `json:"trace_id"`
-	AppID      string `json:"app_id"`
-	SubAppID   string `json:"sub_app_id"`
-	RelatedTID string `json:"related_tid"`
-	RelatedUID string `json:"related_uid"`
-	Usage      string `json:"usage"`
-	Expand     string `json:"expand"`
+	Supplier     int    `json:"supplier"`
+	SupplierName string `json:"supplier_name"`
+	TraceID      string `json:"trace_id"`
+	AppID        string `json:"app_id"`
+	SubAppID     string `json:"sub_app_id"`
+	RelatedTID   string `json:"related_tid"`
+	RelatedUID   string `json:"related_uid"`
+	Usage        string `json:"usage"`
+	Expand       string `json:"expand"`
 }
