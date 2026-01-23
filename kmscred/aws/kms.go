@@ -9,18 +9,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"gomod.pri/golib/kmscred"
 )
 
 // KMSClient wraps the AWS Secrets Manager client
 type KMSClient struct {
 	client *secretsmanager.Client
 	region string
-}
-
-// SecretInfo represents secret information returned by Secrets Manager
-type SecretInfo struct {
-	SecretName  string
-	SecretValue string
 }
 
 // NewKMSClient creates a new Secrets Manager client using IAM role (EC2 metadata service)
@@ -94,7 +89,7 @@ func NewKMSClientWithAKSKFromEnv(region string) (*KMSClient, error) {
 }
 
 // GetSecretInfo retrieves secret information by secret name
-func (c *KMSClient) GetSecretInfo(secretName string) (*SecretInfo, error) {
+func (c *KMSClient) GetSecretInfo(secretName string) (*kmscred.SecretInfo, error) {
 	ctx := context.Background()
 
 	input := &secretsmanager.GetSecretValueInput{
@@ -113,9 +108,9 @@ func (c *KMSClient) GetSecretInfo(secretName string) (*SecretInfo, error) {
 		secretValue = string(result.SecretBinary)
 	}
 
-	return &SecretInfo{
-		SecretName:  secretName,
-		SecretValue: secretValue,
+	return &kmscred.SecretInfo{
+		Name:  secretName,
+		Value: secretValue,
 	}, nil
 }
 
@@ -125,5 +120,5 @@ func (c *KMSClient) GetSecretValue(secretName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return secretInfo.SecretValue, nil
+	return secretInfo.Value, nil
 }

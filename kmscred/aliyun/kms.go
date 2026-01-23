@@ -6,17 +6,12 @@ import (
 
 	"github.com/aliyun/aliyun-secretsmanager-client-go/sdk"
 	"github.com/aliyun/aliyun-secretsmanager-client-go/sdk/service"
+	"gomod.pri/golib/kmscred"
 )
 
 // KMSClient wraps the Aliyun Secrets Manager client
 type KMSClient struct {
 	client *sdk.SecretManagerCacheClient
-}
-
-// SecretInfo represents secret information returned by KMS
-type SecretInfo struct {
-	SecretName  string
-	SecretValue string
 }
 
 // NewKMSClient creates a new KMS client using RAM role (ECS metadata service)
@@ -63,15 +58,15 @@ func NewKMSClientWithAKSKFromEnv(region string) (*KMSClient, error) {
 }
 
 // GetSecretInfo retrieves secret information by secret name
-func (c *KMSClient) GetSecretInfo(secretName string) (*SecretInfo, error) {
+func (c *KMSClient) GetSecretInfo(secretName string) (*kmscred.SecretInfo, error) {
 	secretInfo, err := c.client.GetSecretInfo(secretName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secret info for %s: %w", secretName, err)
 	}
 
-	return &SecretInfo{
-		SecretName:  secretName,
-		SecretValue: secretInfo.SecretValue,
+	return &kmscred.SecretInfo{
+		Name:  secretInfo.SecretName,
+		Value: secretInfo.SecretValue,
 	}, nil
 }
 
@@ -81,5 +76,5 @@ func (c *KMSClient) GetSecretValue(secretName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return secretInfo.SecretValue, nil
+	return secretInfo.Value, nil
 }

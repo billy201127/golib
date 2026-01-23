@@ -9,18 +9,13 @@ import (
 	v2 "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/kms/v2"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/kms/v2/model"
 	kmsRegion "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/kms/v2/region"
+	"gomod.pri/golib/kmscred"
 )
 
 // KMSClient wraps the Huawei Cloud KMS client
 type KMSClient struct {
 	client *v2.KmsClient
 	region string
-}
-
-// SecretInfo represents secret information returned by KMS
-type SecretInfo struct {
-	SecretName  string
-	SecretValue string
 }
 
 // NewKMSClient creates a new KMS client using RAM role (ECS metadata service)
@@ -121,7 +116,7 @@ func NewKMSClientWithAKSKFromEnv(region string) (*KMSClient, error) {
 // Note: Huawei Cloud KMS is primarily for key management, not secret storage.
 // For secret management, you may need to use Huawei Cloud's dedicated secret management service.
 // This implementation uses the ListKeyDetail API to get key information.
-func (c *KMSClient) GetSecretInfo(secretName string) (*SecretInfo, error) {
+func (c *KMSClient) GetSecretInfo(secretName string) (*kmscred.SecretInfo, error) {
 	// Use ListKeyDetail API to get key information
 	request := &model.ListKeyDetailRequest{
 		Body: &model.OperateKeyRequestBody{
@@ -142,9 +137,9 @@ func (c *KMSClient) GetSecretInfo(secretName string) (*SecretInfo, error) {
 		secretValue = *response.KeyInfo.KeyId
 	}
 
-	return &SecretInfo{
-		SecretName:  secretName,
-		SecretValue: secretValue,
+	return &kmscred.SecretInfo{
+		Name:  secretName,
+		Value: secretValue,
 	}, nil
 }
 
@@ -154,5 +149,5 @@ func (c *KMSClient) GetSecretValue(secretName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return secretInfo.SecretValue, nil
+	return secretInfo.Value, nil
 }
