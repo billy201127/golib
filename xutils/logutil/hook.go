@@ -6,6 +6,7 @@ import (
 	"io"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -97,7 +98,6 @@ func NewHookWriter(w io.Writer, config Config) *HookWriter {
 
 func (h *HookWriter) Write(p []byte) (n int, err error) {
 	msg := string(p)
-
 	if isErrorLevelLog(msg) {
 		event := h.newErrorEvent(msg)
 		select {
@@ -105,7 +105,6 @@ func (h *HookWriter) Write(p []byte) (n int, err error) {
 		default:
 		}
 	}
-
 	return h.w.Write(p)
 }
 
@@ -123,10 +122,8 @@ func (h *HookWriter) runNotifier() {
 		select {
 		case event := <-h.msgChan:
 			h.handleEvent(event)
-
 		case <-ticker.C:
 			h.flush()
-
 		case <-h.quit:
 			h.flush()
 			return
@@ -174,7 +171,7 @@ type summaryItem struct {
 	File     string
 	Line     int
 	FuncName string
-	Body     string
+	Message  string
 }
 
 func (h *HookWriter) buildSummaries() []summaryItem {
@@ -189,22 +186,18 @@ func (h *HookWriter) buildSummaries() []summaryItem {
 		if h.limit > 0 && i >= h.limit {
 			break
 		}
-
 		record := h.records[fingerprint]
 		if record == nil {
 			continue
 		}
-
-		body := strings.TrimSpace(formatPlainMessage(stripANSI(record.LastMessage)))
 		summaries = append(summaries, summaryItem{
 			Count:    record.Count,
 			File:     record.File,
 			Line:     record.Line,
 			FuncName: record.FuncName,
-			Body:     body,
+			Message:  stripANSI(record.LastMessage),
 		})
 	}
-
 	return summaries
 }
 
@@ -239,7 +232,7 @@ func sendNotifyMarkdown(channel, webhook, secret string, items []summaryItem) {
 		return
 	}
 
-	content := buildMarkdownContent(items, notifyChannel)
+	content := buildMarkdownCard(items, notifyChannel)
 	content = truncateContent(content)
 	if err := robot.SendCard(context.Background(), "Error Alert", content); err != nil {
 		logx.Errorf("[sendNotify] failed to send markdown card: %v", err)
@@ -257,121 +250,148 @@ func parseNotifyChannel(channel string) notify.NotificationType {
 	}
 }
 
-func buildMarkdownContent(items []summaryItem, channel notify.NotificationType) string {
+func buildMarkdownCard(items []summaryItem, channel notify.NotificationType) string {
 	var sb strings.Builder
-	for i, it := range items {
-		if i > 0 {
+
+	// Attempt to extract hostname from the first message
+	if len(items) > 0 {
+		if host := extractHostname(items[0].Message); host != "" {
+			sb.WriteString("#### Host: ")
+			sb.WriteString(host)
 			sb.WriteString("\n\n")
 		}
-
-		// Keep markdown simple for Feishu.
-		if channel == notify.Feishu {
-			sb.WriteString(fmt.Sprintf("- count=%d\n", it.Count))
-			sb.WriteString(fmt.Sprintf("  loc=%s:%d\n", it.File, it.Line))
-			sb.WriteString(fmt.Sprintf("  func=%s\n", it.FuncName))
-			sb.WriteString("  ```\n")
-			sb.WriteString(escapeCodeBlock(it.Body))
-			sb.WriteString("\n  ```")
-			continue
-		}
-
-		// DingTalk supports a bit more markdown, but still keep it tidy.
-		sb.WriteString(fmt.Sprintf("- **Count**: %d\n", it.Count))
-		sb.WriteString(fmt.Sprintf("  **Location**: %s:%d\n", it.File, it.Line))
-		sb.WriteString(fmt.Sprintf("  **Func**: %s\n", it.FuncName))
-		sb.WriteString("  ```\n")
-		sb.WriteString(escapeCodeBlock(it.Body))
-		sb.WriteString("\n  ```")
 	}
 
-	return strings.TrimRight(sb.String(), "\n")
+	for i, it := range items {
+		if i > 0 {
+			sb.WriteString("---\n\n")
+		}
+
+		// Header: Count and Location
+		if channel == notify.Feishu {
+			fmt.Fprintf(&sb, "Count: %d | Loc: %s:%d\n", it.Count, it.File, it.Line)
+			fmt.Fprintf(&sb, "Func: %s\n", it.FuncName)
+		} else {
+			fmt.Fprintf(&sb, "**Count**: %d | **Loc**: %s:%d\n", it.Count, it.File, it.Line)
+			fmt.Fprintf(&sb, "**Func**: `%s`\n", it.FuncName)
+		}
+
+		// Log Body in code block
+		msg, kv := parseLogMessage(it.Message)
+		sb.WriteString("```text\n")
+		sb.WriteString(msg)
+		sb.WriteString("\n```\n")
+
+		// Metadata (trace/span/caller) as quotes
+		for _, v := range kv {
+			sb.WriteString("> ")
+			sb.WriteString(v)
+			sb.WriteByte('\n')
+		}
+	}
+
+	return sb.String()
 }
 
-func escapeCodeBlock(s string) string {
-	// Prevent breaking out of fenced code blocks.
-	return strings.ReplaceAll(s, "```", "``\u200b`")
-}
-
-func formatPlainMessage(msg string) string {
-	msg = strings.TrimSpace(msg)
-	if msg == "" {
+func extractHostname(msg string) string {
+	start := strings.Index(msg, "hostname: [")
+	if start < 0 {
 		return ""
 	}
-
-	parts := strings.Split(msg, "\t")
-	if len(parts) < 3 {
-		return msg
+	end := strings.Index(msg[start:], "]")
+	if end < 0 {
+		return ""
 	}
-
-	timestamp := strings.TrimSpace(parts[0])
-	level := strings.ToUpper(strings.TrimSpace(parts[1]))
-	content := strings.Join(parts[2:], "\t")
-
-	mainMsg, kv := splitKV(content)
-
-	var sb strings.Builder
-	sb.WriteString(timestamp)
-	sb.WriteString(" [")
-	sb.WriteString(level)
-	sb.WriteString("]\n")
-	sb.WriteString(mainMsg)
-
-	for _, p := range kv {
-		sb.WriteByte('\n')
-		sb.WriteString(p)
-	}
-
-	return strings.TrimRight(sb.String(), "\n")
+	return strings.TrimSpace(msg[start+11 : start+end])
 }
 
-func splitKV(s string) (string, []string) {
+func parseLogMessage(s string) (msg string, kv []string) {
 	s = strings.TrimSpace(s)
-	if s == "" {
-		return "", nil
+	// Skip hostname prefix if present
+	if idx := strings.Index(s, "]\n"); idx > 0 {
+		s = strings.TrimSpace(s[idx+2:])
 	}
 
-	idx := strings.Index(s, " caller=")
-	if idx < 0 {
-		idx = strings.Index(s, "\tcaller=")
-	}
-	if idx < 0 {
-		idx = strings.Index(s, "caller=")
-		if idx != 0 {
-			idx = -1
-		}
-	}
-	if idx < 0 {
+	parts := strings.Split(s, "\t")
+	if len(parts) < 3 {
 		return s, nil
 	}
 
-	main := strings.TrimSpace(s[:idx])
-	attrs := strings.TrimSpace(s[idx:])
+	// [0] timestamp, [1] level, [2:] content
+	header := fmt.Sprintf("%s [%s]", strings.TrimSpace(parts[0]), strings.ToUpper(strings.TrimSpace(parts[1])))
+	content := strings.Join(parts[2:], "\t")
 
-	fields := strings.Fields(attrs)
-	out := make([]string, 0, len(fields))
+	// Split main message and attributes.
+	// Rule: tokens that look like "k=v" are attributes; others are part of the human-readable message.
+	fields := strings.Fields(content)
+	mainParts := make([]string, 0, len(fields))
+	attrs := make([]string, 0, 8)
+
+	// Add timestamp to attrs
+	attrs = append(attrs, fmt.Sprintf("time=%s", strings.TrimSpace(parts[0])))
+
 	for _, f := range fields {
-		out = append(out, f)
+		if isKVToken(f) {
+			attrs = append(attrs, f)
+			continue
+		}
+		mainParts = append(mainParts, f)
 	}
-	return main, out
+
+	mainMsg := strings.TrimSpace(strings.Join(mainParts, " "))
+	attrs = stableOrderAttrs(attrs)
+
+	return mainMsg, attrs
+}
+
+func isKVToken(s string) bool {
+	idx := strings.Index(s, "=")
+	return idx > 0 && idx < len(s)-1
+}
+
+func stableOrderAttrs(attrs []string) []string {
+	if len(attrs) <= 1 {
+		return attrs
+	}
+	// Sort attributes to keep time/trace/span/caller at a stable position if possible
+	sort.Slice(attrs, func(i, j int) bool {
+		return getAttrWeight(attrs[i]) < getAttrWeight(attrs[j])
+	})
+	return attrs
+}
+
+func getAttrWeight(s string) int {
+	if strings.HasPrefix(s, "time=") {
+		return 0
+	}
+	if strings.HasPrefix(s, "trace=") {
+		return 1
+	}
+	if strings.HasPrefix(s, "span=") {
+		return 2
+	}
+	if strings.HasPrefix(s, "caller=") {
+		return 3
+	}
+	if strings.HasPrefix(s, "app=") {
+		return 4
+	}
+	return 10
 }
 
 func truncateContent(content string) string {
 	if len(content) <= maxNotifyContentLen {
 		return content
 	}
-
 	truncated := content[:maxNotifyContentLen]
 	if lastNewline := strings.LastIndex(truncated, "\n"); lastNewline > maxNotifyContentLen/2 {
 		truncated = truncated[:lastNewline]
 	}
-
-	return truncated + fmt.Sprintf("\n\n[Message truncated, original size: %d bytes]", len(content))
+	return truncated + fmt.Sprintf("\n\n[Truncated, size: %d]", len(content))
 }
 
 func stripANSI(s string) string {
 	var result strings.Builder
-	result.Grow(len(s))
-
 	i := 0
 	for i < len(s) {
 		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
@@ -393,11 +413,9 @@ func stripANSI(s string) string {
 func isErrorLevelLog(msg string) bool {
 	cleanMsg := stripANSI(msg)
 	lower := strings.ToLower(cleanMsg)
-
 	if strings.Contains(lower, `"level":"error"`) || strings.Contains(lower, " level=error") {
 		return true
 	}
-
 	fields := strings.Fields(cleanMsg)
 	if len(fields) >= 2 {
 		level := strings.Trim(fields[1], "[]")
@@ -407,29 +425,7 @@ func isErrorLevelLog(msg string) bool {
 			return true
 		}
 	}
-
-	return hasStandaloneError(lower)
-}
-
-func hasStandaloneError(lower string) bool {
-	if idx := strings.Index(lower, " error"); idx >= 0 {
-		if (idx == 0 || isWhitespace(lower[idx-1])) &&
-			(idx+6 >= len(lower) || isWhitespace(lower[idx+6])) {
-			return true
-		}
-	}
-
-	if idx := strings.Index(lower, "\terror"); idx >= 0 {
-		if idx+7 >= len(lower) || isWhitespace(lower[idx+7]) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func isWhitespace(c byte) bool {
-	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+	return strings.Contains(lower, " error") || strings.Contains(lower, "\terror")
 }
 
 type frameFilter struct {
@@ -451,7 +447,6 @@ func (f *frameFilter) captureCaller() (file string, line int, funcName string) {
 	if n == 0 {
 		return "unknown", 0, "unknown"
 	}
-
 	frames := runtime.CallersFrames(pcs[:n])
 	for {
 		frame, more := frames.Next()
@@ -462,7 +457,6 @@ func (f *frameFilter) captureCaller() (file string, line int, funcName string) {
 			break
 		}
 	}
-
 	return "unknown", 0, "unknown"
 }
 
@@ -470,24 +464,15 @@ func (f *frameFilter) isBusinessFrame(function, file string) bool {
 	if function == "" || file == "" {
 		return false
 	}
-
 	if hasAnyPrefix(function, f.skipPrefixes) || hasAnyPrefix(file, f.skipPrefixes) {
 		return false
 	}
-
-	if len(f.allowPrefixes) > 0 &&
-		(hasAnyPrefix(function, f.allowPrefixes) || hasAnyPrefix(file, f.allowPrefixes)) {
+	if len(f.allowPrefixes) > 0 && (hasAnyPrefix(function, f.allowPrefixes) || hasAnyPrefix(file, f.allowPrefixes)) {
 		return true
 	}
-
-	if strings.Contains(file, runtimePathSegment) {
+	if strings.Contains(file, runtimePathSegment) || (!f.includeStdlib && isStdLibFile(file)) {
 		return false
 	}
-
-	if !f.includeStdlib && isStdLibFile(file) {
-		return false
-	}
-
 	return true
 }
 
@@ -501,14 +486,11 @@ func hasAnyPrefix(target string, prefixes []string) bool {
 }
 
 func isStdLibFile(file string) bool {
-	// NOTE: runtime.GOROOT() is deprecated but still fine for a heuristic filter.
 	goroot := runtime.GOROOT()
 	if goroot == "" {
 		return strings.Contains(file, "/src/")
 	}
-
-	src := filepath.Join(goroot, "src")
-	return strings.HasPrefix(file, src)
+	return strings.HasPrefix(file, filepath.Join(goroot, "src"))
 }
 
 func minInt(a, b int) int {
