@@ -267,18 +267,6 @@ func buildMarkdownCard(items []summaryItem, channel notify.NotificationType) str
 			sb.WriteString("---\n\n")
 		}
 
-		// Header
-		if channel == notify.Feishu {
-			fmt.Fprintf(&sb, "- count: %d\n", it.Count)
-			fmt.Fprintf(&sb, "- loc: %s:%d\n", it.File, it.Line)
-			fmt.Fprintf(&sb, "- func: %s\n", it.FuncName)
-		} else {
-			fmt.Fprintf(&sb, "- **Count**: %d\n", it.Count)
-			fmt.Fprintf(&sb, "- **Loc**: %s:%d\n", it.File, it.Line)
-			fmt.Fprintf(&sb, "- **Func**: `%s`\n", it.FuncName)
-		}
-		sb.WriteString("\n")
-
 		msg, kv := parseLogMessage(it.Message)
 
 		// Render everything in a single code block for maximum readability across clients.
@@ -293,7 +281,7 @@ func buildMarkdownCard(items []summaryItem, channel notify.NotificationType) str
 			fmt.Fprintf(&sb, "func: %s\n", it.FuncName)
 		}
 		sb.WriteString("\n")
-		sb.WriteString("content:\n")
+		sb.WriteString("msg:\n")
 		sb.WriteString(msg)
 		if len(kv) > 0 {
 			sb.WriteString("\n\n")
@@ -426,20 +414,28 @@ func stripANSI(s string) string {
 
 func isErrorLevelLog(msg string) bool {
 	cleanMsg := stripANSI(msg)
+
+	// Your logs are tab-separated: "timestamp\tlevel\tcontent..."
+	// So we only treat it as error if the second field is an error level.
+	parts := strings.Split(cleanMsg, "\t")
+	if len(parts) >= 2 {
+		level := strings.ToLower(strings.TrimSpace(parts[1]))
+		level = strings.Trim(level, "[]")
+		switch level {
+		case "error", "err", "erro":
+			return true
+		default:
+			return false
+		}
+	}
+
+	// Fallback for non-tab logs / structured logs.
 	lower := strings.ToLower(cleanMsg)
 	if strings.Contains(lower, `"level":"error"`) || strings.Contains(lower, " level=error") {
 		return true
 	}
-	fields := strings.Fields(cleanMsg)
-	if len(fields) >= 2 {
-		level := strings.Trim(fields[1], "[]")
-		level = strings.ToLower(level)
-		switch level {
-		case "error", "err", "erro":
-			return true
-		}
-	}
-	return strings.Contains(lower, " error") || strings.Contains(lower, "\terror")
+
+	return false
 }
 
 type frameFilter struct {
