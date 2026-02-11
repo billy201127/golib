@@ -318,7 +318,6 @@ func parseLogMessage(s string) (msg string, kv []string) {
 	}
 
 	// [0] timestamp, [1] level, [2:] content
-	header := fmt.Sprintf("%s [%s]", strings.TrimSpace(parts[0]), strings.ToUpper(strings.TrimSpace(parts[1])))
 	content := strings.Join(parts[2:], "\t")
 
 	// Split main message and attributes.
