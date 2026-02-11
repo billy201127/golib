@@ -174,11 +174,23 @@ func (c *Consumer[T]) consume() {
 
 					ctx = prop.Extract(ctx, carrier)
 
+					reconsumeTimes := ""
+					if v, ok := props["RECONSUME_TIMES"]; ok {
+						reconsumeTimes = v
+					} else if v, ok := props["reconsumeTimes"]; ok {
+						reconsumeTimes = v
+					}
+
+					attrs := []attribute.KeyValue{
+						attribute.String("message.topic", msg.GetTopic()),
+						attribute.String("message.id", msg.GetMessageId()),
+					}
+					if reconsumeTimes != "" {
+						attrs = append(attrs, attribute.String("message.reconsume_times", reconsumeTimes))
+					}
+
 					msgCtx, msgSpan := tracer.Start(ctx, "rocket.Consumer.ProcessMessage",
-						trace.WithAttributes(
-							attribute.String("message.topic", msg.GetTopic()),
-							attribute.String("message.id", msg.GetMessageId()),
-						),
+						trace.WithAttributes(attrs...),
 						trace.WithSpanKind(trace.SpanKindConsumer),
 					)
 					defer msgSpan.End()
@@ -198,14 +210,14 @@ func (c *Consumer[T]) consume() {
 						c.handler.ErrorHandler(msgCtx, data, err)
 						msgSpan.RecordError(err)
 						msgSpan.SetStatus(codes.Error, err.Error())
-						if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
+						if ackErr := c.consumer.Ack(ctx, msg); ackErr != nil {
 							msgSpan.RecordError(ackErr)
 						}
 						return
 					}
 
 					// ack
-					if err = c.consumer.Ack(msgCtx, msg); err != nil {
+					if err = c.consumer.Ack(ctx, msg); err != nil {
 						msgSpan.RecordError(err)
 						msgSpan.SetStatus(codes.Error, err.Error())
 					} else {
