@@ -267,14 +267,17 @@ func buildMarkdownCard(items []summaryItem, channel notify.NotificationType) str
 			sb.WriteString("---\n\n")
 		}
 
-		// Header: Count and Location
+		// Header
 		if channel == notify.Feishu {
-			fmt.Fprintf(&sb, "Count: %d | Loc: %s:%d\n", it.Count, it.File, it.Line)
-			fmt.Fprintf(&sb, "Func: %s\n", it.FuncName)
+			fmt.Fprintf(&sb, "- count: %d\n", it.Count)
+			fmt.Fprintf(&sb, "- loc: %s:%d\n", it.File, it.Line)
+			fmt.Fprintf(&sb, "- func: %s\n", it.FuncName)
 		} else {
-			fmt.Fprintf(&sb, "**Count**: %d | **Loc**: %s:%d\n", it.Count, it.File, it.Line)
-			fmt.Fprintf(&sb, "**Func**: `%s`\n", it.FuncName)
+			fmt.Fprintf(&sb, "- **Count**: %d\n", it.Count)
+			fmt.Fprintf(&sb, "- **Loc**: %s:%d\n", it.File, it.Line)
+			fmt.Fprintf(&sb, "- **Func**: `%s`\n", it.FuncName)
 		}
+		sb.WriteString("\n")
 
 		// Log Body in code block
 		msg, kv := parseLogMessage(it.Message)
@@ -282,11 +285,14 @@ func buildMarkdownCard(items []summaryItem, channel notify.NotificationType) str
 		sb.WriteString(msg)
 		sb.WriteString("\n```\n")
 
-		// Metadata (trace/span/caller) as quotes
-		for _, v := range kv {
-			sb.WriteString("> ")
-			sb.WriteString(v)
-			sb.WriteByte('\n')
+		// Attributes in separate code block to force per-line rendering
+		if len(kv) > 0 {
+			sb.WriteString("\n```text\n")
+			for _, v := range kv {
+				sb.WriteString(v)
+				sb.WriteByte('\n')
+			}
+			sb.WriteString("```\n")
 		}
 	}
 
