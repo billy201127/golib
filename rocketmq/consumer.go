@@ -175,10 +175,11 @@ func (c *Consumer[T]) consume() {
 					ctx = prop.Extract(ctx, carrier)
 
 					reconsumeTimes := ""
-					if v, ok := props["RECONSUME_TIMES"]; ok {
-						reconsumeTimes = v
-					} else if v, ok := props["reconsumeTimes"]; ok {
-						reconsumeTimes = v
+					for _, key := range []string{"RECONSUME_TIMES", "reconsumeTimes", "x-rocketmq-reconsume-times"} {
+						if v, ok := props[key]; ok {
+							reconsumeTimes = v
+							break
+						}
 					}
 
 					attrs := []attribute.KeyValue{
@@ -210,18 +211,21 @@ func (c *Consumer[T]) consume() {
 						c.handler.ErrorHandler(msgCtx, data, err)
 						msgSpan.RecordError(err)
 						msgSpan.SetStatus(codes.Error, err.Error())
-						if ackErr := c.consumer.Ack(ctx, msg); ackErr != nil {
+						if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
 							msgSpan.RecordError(ackErr)
+							msgSpan.SetStatus(codes.Error, ackErr.Error())
 						}
 						return
 					}
 
 					// ack
-					if err = c.consumer.Ack(ctx, msg); err != nil {
+					if err = c.consumer.Ack(msgCtx, msg); err != nil {
 						msgSpan.RecordError(err)
-						msgSpan.SetStatus(codes.Error, err.Error())
+						msgSpan.SetStatus(codes.Error, "ack failed: "+err.Error())
+						msgSpan.SetAttributes(attribute.String("ack.error", err.Error()))
 					} else {
 						msgSpan.SetStatus(codes.Ok, "")
+						msgSpan.SetAttributes(attribute.Bool("ack.success", true))
 					}
 				}()
 			}
