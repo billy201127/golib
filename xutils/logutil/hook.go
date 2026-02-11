@@ -279,21 +279,30 @@ func buildMarkdownCard(items []summaryItem, channel notify.NotificationType) str
 		}
 		sb.WriteString("\n")
 
-		// Log Body in code block
 		msg, kv := parseLogMessage(it.Message)
-		sb.WriteString("```text\n")
-		sb.WriteString(msg)
-		sb.WriteString("\n```\n")
 
-		// Attributes in separate code block to force per-line rendering
+		// Render everything in a single code block for maximum readability across clients.
+		sb.WriteString("```text\n")
+		if channel == notify.Feishu {
+			fmt.Fprintf(&sb, "count: %d\n", it.Count)
+			fmt.Fprintf(&sb, "loc: %s:%d\n", it.File, it.Line)
+			fmt.Fprintf(&sb, "func: %s\n", it.FuncName)
+		} else {
+			fmt.Fprintf(&sb, "count: %d\n", it.Count)
+			fmt.Fprintf(&sb, "loc: %s:%d\n", it.File, it.Line)
+			fmt.Fprintf(&sb, "func: %s\n", it.FuncName)
+		}
+		sb.WriteString("\n")
+		sb.WriteString("content:\n")
+		sb.WriteString(msg)
 		if len(kv) > 0 {
-			sb.WriteString("\n```text\n")
+			sb.WriteString("\n\n")
 			for _, v := range kv {
 				sb.WriteString(v)
 				sb.WriteByte('\n')
 			}
-			sb.WriteString("```\n")
 		}
+		sb.WriteString("```\n")
 	}
 
 	return sb.String()
