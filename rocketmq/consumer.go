@@ -24,9 +24,9 @@ var (
 	// maximum waiting time for receive func
 	awaitDuration = time.Second * 5
 	// maximum number of messages received at once time
-	maxMessageNum int32 = 16
+	maxMessageNum int32 = 4
 	// invisibleDuration should > 20s
-	invisibleDuration = time.Second * 120
+	invisibleDuration = time.Minute * 20
 )
 
 type ConsumerConfig struct {
@@ -151,6 +151,7 @@ func (c *Consumer[T]) consume() {
 			}
 
 			for _, msg := range msgs {
+				receiveAt := time.Now()
 				func() {
 					defer func() {
 						if r := recover(); r != nil {
@@ -207,26 +208,36 @@ func (c *Consumer[T]) consume() {
 						return
 					}
 
-					ackCtx, ackCancel := context.WithTimeout(context.WithoutCancel(msgCtx), time.Second*5)
+					ackCtx, ackCancel := context.WithTimeout(context.WithoutCancel(msgCtx), time.Second*20)
 					defer ackCancel()
+
+					// Record diagnostic metrics before Ack
+					if deadline, ok := msgCtx.Deadline(); ok {
+						msgSpan.SetAttributes(attribute.Int64("consumer.msg_ctx_deadline_left_ms", time.Until(deadline).Milliseconds()))
+					}
+					msgSpan.SetAttributes(attribute.Int64("consumer.receive_to_ack_ms", time.Since(receiveAt).Milliseconds()))
 
 					if err = c.handler.Consume(msgCtx, data); err != nil {
 						c.handler.ErrorHandler(msgCtx, data, err)
 						msgSpan.RecordError(err)
-						msgSpan.SetStatus(codes.Ok, err.Error())
+						// 业务函数返回了，我们按预期 Ack 掉，所以这里不把 Span 状态设为永久 Error
+						// 除非后续 Ack 也失败了
 
 						if ackErr := c.consumer.Ack(ackCtx, msg); ackErr != nil {
 							msgSpan.RecordError(ackErr)
-							msgSpan.SetStatus(codes.Error, "ack failed: "+ackErr.Error())
+							msgSpan.SetStatus(codes.Error, "biz_err_and_ack_failed: "+ackErr.Error())
 							msgSpan.SetAttributes(attribute.String("ack.error", ackErr.Error()))
+						} else {
+							msgSpan.SetStatus(codes.Ok, "biz_err_but_ack_success")
+							msgSpan.SetAttributes(attribute.Bool("ack.success", true))
 						}
 						return
 					}
 
-					// ack
+					// 正常处理完成后的 ack
 					if err = c.consumer.Ack(ackCtx, msg); err != nil {
 						msgSpan.RecordError(err)
-						msgSpan.SetStatus(codes.Error, "ack failed: "+err.Error())
+						msgSpan.SetStatus(codes.Error, "biz_succss_but_ack_failed: "+err.Error())
 						msgSpan.SetAttributes(attribute.String("ack.error", err.Error()))
 					} else {
 						msgSpan.SetStatus(codes.Ok, "")
