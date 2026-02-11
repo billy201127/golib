@@ -207,19 +207,24 @@ func (c *Consumer[T]) consume() {
 						return
 					}
 
+					ackCtx, ackCancel := context.WithTimeout(context.WithoutCancel(msgCtx), time.Second*5)
+					defer ackCancel()
+
 					if err = c.handler.Consume(msgCtx, data); err != nil {
 						c.handler.ErrorHandler(msgCtx, data, err)
 						msgSpan.RecordError(err)
-						msgSpan.SetStatus(codes.Error, err.Error())
-						if ackErr := c.consumer.Ack(msgCtx, msg); ackErr != nil {
+						msgSpan.SetStatus(codes.Ok, err.Error())
+
+						if ackErr := c.consumer.Ack(ackCtx, msg); ackErr != nil {
 							msgSpan.RecordError(ackErr)
-							msgSpan.SetStatus(codes.Error, ackErr.Error())
+							msgSpan.SetStatus(codes.Error, "ack failed: "+ackErr.Error())
+							msgSpan.SetAttributes(attribute.String("ack.error", ackErr.Error()))
 						}
 						return
 					}
 
 					// ack
-					if err = c.consumer.Ack(msgCtx, msg); err != nil {
+					if err = c.consumer.Ack(ackCtx, msg); err != nil {
 						msgSpan.RecordError(err)
 						msgSpan.SetStatus(codes.Error, "ack failed: "+err.Error())
 						msgSpan.SetAttributes(attribute.String("ack.error", err.Error()))
