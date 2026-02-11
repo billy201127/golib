@@ -305,21 +305,68 @@ func sendJSONNotification(robot notify.Notification, msgs []string, channel noti
 // sendPlainNotification sends notifications in plain text format.
 func sendPlainNotification(robot notify.Notification, msgs []string) {
 	var sb strings.Builder
-	sb.Grow(len(msgs) * 150) // Pre-allocate buffer
+	sb.Grow(len(msgs) * 200)
 
 	for i, msg := range msgs {
 		if i > 0 {
-			sb.WriteString("\n")
+			sb.WriteString("\n---\n")
 		}
-		// Strip ANSI codes and output original message
+		// Strip ANSI and pretty-print the message
 		cleanMsg := stripANSI(msg)
-		sb.WriteString(cleanMsg)
+		sb.WriteString(formatPlainMessage(cleanMsg))
 	}
 
 	content := truncateContent(sb.String())
 	if err := robot.SendText(context.Background(), content); err != nil {
 		logx.Errorf("[sendNotify] failed to send text: %v", err)
 	}
+}
+
+// formatPlainMessage improves the readability of plain-text logs by splitting metadata and content.
+func formatPlainMessage(msg string) string {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return ""
+	}
+
+	// Example: 2026-02-11T15:07:32.648+07:00	 error 	Message content	caller=...	trace=...
+	parts := strings.Split(msg, "\t")
+	if len(parts) < 3 {
+		return msg // Fallback to original
+	}
+
+	var sb strings.Builder
+	// 1. Header (Timestamp and Level)
+	sb.WriteString(strings.TrimSpace(parts[0]))
+	sb.WriteString(" [")
+	sb.WriteString(strings.ToUpper(strings.TrimSpace(parts[1])))
+	sb.WriteString("]\n")
+
+	// 2. Main Message and Key-Value pairs
+	content := strings.Join(parts[2:], "\t")
+
+	// Split message from caller/trace/span attributes
+	attrStart := strings.Index(content, "caller=")
+	if attrStart > 0 {
+		mainMsg := strings.TrimSpace(content[:attrStart])
+		attrs := strings.TrimSpace(content[attrStart:])
+
+		sb.WriteString("**Message**: ")
+		sb.WriteString(mainMsg)
+		sb.WriteString("\n")
+
+		// Pretty print attributes
+		attrParts := strings.Fields(attrs)
+		for _, attr := range attrParts {
+			sb.WriteString("> ")
+			sb.WriteString(attr)
+			sb.WriteString("\n")
+		}
+	} else {
+		sb.WriteString(content)
+	}
+
+	return strings.TrimRight(sb.String(), "\n")
 }
 
 // truncateContent ensures content is within DingTalk's 20KB limit.
