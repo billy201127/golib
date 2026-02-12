@@ -259,9 +259,8 @@ func buildMarkdownCard(items []summaryItem) string {
 
 	if len(items) > 0 {
 		if host := extractHostname(items[0].Message); host != "" {
-			sb.WriteString("#### Host: ")
-			sb.WriteString(host)
-			sb.WriteString("\n\n")
+			writeKVLine(&sb, "host", host)
+			sb.WriteString("\n")
 		}
 	}
 
@@ -311,7 +310,7 @@ func writeKVLine(sb *strings.Builder, key, value string) {
 	// Markdown line break: "  \n"
 	sb.WriteString("**")
 	sb.WriteString(key)
-	sb.WriteString("** = ")
+	sb.WriteString(":** ")
 	sb.WriteString(escapeMarkdownInline(value))
 	sb.WriteString("  \n")
 }
@@ -380,7 +379,7 @@ func parseLogMessage(s string) (msg string, attrs map[string]string, extras []st
 			// Ignore go-zero caller; we force runtime caller path
 			continue
 		default:
-			extras = append(extras, fmt.Sprintf("**%s** = %s", k, escapeMarkdownInline(v)))
+			extras = append(extras, fmt.Sprintf("**%s:** %s", k, escapeMarkdownInline(v)))
 		}
 	}
 
