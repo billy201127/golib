@@ -273,42 +273,56 @@ func buildMarkdownCard(items []summaryItem) string {
 		msg, attrs, extras := parseLogMessage(it.Message)
 
 		file := fmt.Sprintf("%s:%d", it.File, it.Line)
-		fn := it.FuncName
-		if fn == "" {
-			fn = it.FuncNameFull
-		}
-
-		sb.WriteString("```text\n")
-		fmt.Fprintf(&sb, "count: %d\n", it.Count)
-		if v := attrs["time"]; v != "" {
-			fmt.Fprintf(&sb, "time: %s\n", v)
-		}
-		if fn != "" {
-			fmt.Fprintf(&sb, "func: %s\n", fn)
-		}
-
-		// Force caller path from runtime frame capture, but truncate to start from project root if possible
 		callerPath := truncateCallerPath(file)
-		fmt.Fprintf(&sb, "caller: %s\n", callerPath)
 
-		for _, k := range []string{"trace", "span"} {
-			if v := attrs[k]; v != "" {
-				fmt.Fprintf(&sb, "%s: %s\n", k, v)
-			}
+		writeKVLine(&sb, "count", fmt.Sprint(it.Count))
+		if v := attrs["time"]; v != "" {
+			writeKVLine(&sb, "time", v)
+		}
+		if it.FuncName != "" {
+			writeKVLine(&sb, "func", it.FuncName)
+		}
+		writeKVLine(&sb, "caller", callerPath)
+		if v := attrs["trace"]; v != "" {
+			writeKVLine(&sb, "trace", v)
+		}
+		if v := attrs["span"]; v != "" {
+			writeKVLine(&sb, "span", v)
 		}
 
 		for _, e := range extras {
 			sb.WriteString(e)
-			sb.WriteByte('\n')
+			sb.WriteString("  \n")
 		}
 
-		sb.WriteString("msg: ")
-		sb.WriteString(escapeCodeBlock(msg))
+		writeKVLine(&sb, "msg", msg)
 		sb.WriteString("\n")
-		sb.WriteString("```\n")
 	}
 
 	return strings.TrimRight(sb.String(), "\n")
+}
+
+func writeKVLine(sb *strings.Builder, key, value string) {
+	key = strings.TrimSpace(key)
+	value = strings.TrimSpace(value)
+	if key == "" {
+		return
+	}
+	// Markdown line break: "  \n"
+	sb.WriteString("**")
+	sb.WriteString(key)
+	sb.WriteString("** = ")
+	sb.WriteString(escapeMarkdownInline(value))
+	sb.WriteString("  \n")
+}
+
+func escapeMarkdownInline(s string) string {
+	// Prevent value from breaking markdown. Keep it readable.
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "`", "\\`")
+	s = strings.ReplaceAll(s, "*", "\\*")
+	return s
 }
 
 func extractHostname(msg string) string {
@@ -336,7 +350,6 @@ func parseLogMessage(s string) (msg string, attrs map[string]string, extras []st
 
 	attrs = make(map[string]string, 8)
 	seen := make(map[string]struct{}, 16)
-	// Fixed attr from timestamp
 	attrs["time"] = strings.TrimSpace(parts[0])
 
 	content := strings.Join(parts[2:], "\t")
@@ -355,17 +368,19 @@ func parseLogMessage(s string) (msg string, attrs map[string]string, extras []st
 			continue
 		}
 
-		// de-dup: keep first occurrence
 		if _, ok := seen[k]; ok {
 			continue
 		}
 		seen[k] = struct{}{}
 
 		switch k {
-		case "caller", "trace", "span":
+		case "trace", "span":
 			attrs[k] = v
+		case "caller":
+			// Ignore go-zero caller; we force runtime caller path
+			continue
 		default:
-			extras = append(extras, fmt.Sprintf("%s=%s", k, v))
+			extras = append(extras, fmt.Sprintf("**%s** = %s", k, escapeMarkdownInline(v)))
 		}
 	}
 
@@ -391,22 +406,13 @@ func simplifyFuncName(full string) string {
 	if full == "" {
 		return ""
 	}
-
-	// Drop long module path: keep last path segment + receiver.func
-	// e.g. microloan/.../risk.(*CreditApplyHandler).DealResponse -> risk.(*CreditApplyHandler).DealResponse
 	if idx := strings.LastIndex(full, "/"); idx >= 0 && idx+1 < len(full) {
 		return full[idx+1:]
 	}
 	return full
 }
 
-func escapeCodeBlock(s string) string {
-	// Prevent breaking out of fenced code blocks.
-	return strings.ReplaceAll(s, "```", "``\u200b`")
-}
-
 func truncateCallerPath(fileLine string) string {
-	// fileLine like: /data/.../microloan/app/.../credit_apply.go:48
 	idx := strings.Index(fileLine, "microloan/")
 	if idx < 0 {
 		idx = strings.Index(fileLine, "microloan\\")

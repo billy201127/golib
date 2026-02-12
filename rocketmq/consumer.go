@@ -208,9 +208,6 @@ func (c *Consumer[T]) consume() {
 						return
 					}
 
-					ackCtx, ackCancel := context.WithTimeout(context.WithoutCancel(msgCtx), time.Second*30)
-					defer ackCancel()
-
 					consumeStart := time.Now()
 					msgSpan.SetAttributes(attribute.Int64("consumer.receive_to_consume_ms", time.Since(receiveAt).Milliseconds()))
 
@@ -221,7 +218,13 @@ func (c *Consumer[T]) consume() {
 						// 业务函数返回了，我们按预期 Ack 掉，所以这里不把 Span 状态设为永久 Error
 						// 除非后续 Ack 也失败了
 
-						if ackErr := c.consumer.Ack(ackCtx, msg); ackErr != nil {
+						ackCtx, ackCancel := context.WithTimeout(context.WithoutCancel(msgCtx), time.Second*30)
+						ackStart := time.Now()
+						ackErr := c.consumer.Ack(ackCtx, msg)
+						ackCancel()
+
+						msgSpan.SetAttributes(attribute.Int64("consumer.ack_ms", time.Since(ackStart).Milliseconds()))
+						if ackErr != nil {
 							msgSpan.RecordError(ackErr)
 							msgSpan.SetStatus(codes.Error, "biz_err_and_ack_failed: "+ackErr.Error())
 							msgSpan.SetAttributes(attribute.String("ack.error", ackErr.Error()))
@@ -238,16 +241,19 @@ func (c *Consumer[T]) consume() {
 					if deadline, ok := msgCtx.Deadline(); ok {
 						msgSpan.SetAttributes(attribute.Int64("consumer.msg_ctx_deadline_left_ms", time.Until(deadline).Milliseconds()))
 					}
-					ackStart := time.Now()
 
 					// 正常处理完成后的 ack
-					if err = c.consumer.Ack(ackCtx, msg); err != nil {
-						msgSpan.SetAttributes(attribute.Int64("consumer.ack_ms", time.Since(ackStart).Milliseconds()))
+					ackCtx, ackCancel := context.WithTimeout(context.WithoutCancel(msgCtx), time.Second*30)
+					ackStart := time.Now()
+					err = c.consumer.Ack(ackCtx, msg)
+					ackCancel()
+
+					msgSpan.SetAttributes(attribute.Int64("consumer.ack_ms", time.Since(ackStart).Milliseconds()))
+					if err != nil {
 						msgSpan.RecordError(err)
 						msgSpan.SetStatus(codes.Error, "biz_succss_but_ack_failed: "+err.Error())
 						msgSpan.SetAttributes(attribute.String("ack.error", err.Error()))
 					} else {
-						msgSpan.SetAttributes(attribute.Int64("consumer.ack_ms", time.Since(ackStart).Milliseconds()))
 						msgSpan.SetStatus(codes.Ok, "")
 						msgSpan.SetAttributes(attribute.Bool("ack.success", true))
 					}
