@@ -279,25 +279,20 @@ func buildMarkdownCard(items []summaryItem) string {
 		}
 
 		sb.WriteString("```text\n")
-		fmt.Fprintf(&sb, "count=%d\n", it.Count)
+		fmt.Fprintf(&sb, "count = %d\n", it.Count)
 		if v := attrs["time"]; v != "" {
-			fmt.Fprintf(&sb, "time=%s\n", v)
+			fmt.Fprintf(&sb, "time = %s\n", v)
 		}
 		if fn != "" {
-			fmt.Fprintf(&sb, "func=%s\n", fn)
+			fmt.Fprintf(&sb, "func = %s\n", fn)
 		}
 
-		caller := attrs["caller"]
-		if caller == "" {
-			caller = file
-		} else if !strings.Contains(caller, ":") {
-			caller = caller + ":" + fmt.Sprint(it.Line)
-		}
-		fmt.Fprintf(&sb, "caller=%s\n", caller)
+		// Force full caller path from runtime frame capture
+		fmt.Fprintf(&sb, "caller = %s\n", file)
 
 		for _, k := range []string{"trace", "span"} {
 			if v := attrs[k]; v != "" {
-				fmt.Fprintf(&sb, "%s=%s\n", k, v)
+				fmt.Fprintf(&sb, "%s = %s\n", k, v)
 			}
 		}
 
@@ -306,7 +301,7 @@ func buildMarkdownCard(items []summaryItem) string {
 			sb.WriteByte('\n')
 		}
 
-		sb.WriteString("msg=")
+		sb.WriteString("msg = ")
 		sb.WriteString(escapeCodeBlock(msg))
 		sb.WriteString("\n")
 		if it.FuncNameFull != "" && it.FuncName != "" && it.FuncNameFull != it.FuncName {

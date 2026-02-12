@@ -208,16 +208,14 @@ func (c *Consumer[T]) consume() {
 						return
 					}
 
-					ackCtx, ackCancel := context.WithTimeout(context.WithoutCancel(msgCtx), time.Second*20)
+					ackCtx, ackCancel := context.WithTimeout(context.WithoutCancel(msgCtx), time.Second*30)
 					defer ackCancel()
 
-					// Record diagnostic metrics before Ack
-					if deadline, ok := msgCtx.Deadline(); ok {
-						msgSpan.SetAttributes(attribute.Int64("consumer.msg_ctx_deadline_left_ms", time.Until(deadline).Milliseconds()))
-					}
-					msgSpan.SetAttributes(attribute.Int64("consumer.receive_to_ack_ms", time.Since(receiveAt).Milliseconds()))
+					consumeStart := time.Now()
+					msgSpan.SetAttributes(attribute.Int64("consumer.receive_to_consume_ms", time.Since(receiveAt).Milliseconds()))
 
 					if err = c.handler.Consume(msgCtx, data); err != nil {
+						msgSpan.SetAttributes(attribute.Int64("consumer.consume_ms", time.Since(consumeStart).Milliseconds()))
 						c.handler.ErrorHandler(msgCtx, data, err)
 						msgSpan.RecordError(err)
 						// 业务函数返回了，我们按预期 Ack 掉，所以这里不把 Span 状态设为永久 Error
@@ -234,12 +232,22 @@ func (c *Consumer[T]) consume() {
 						return
 					}
 
+					msgSpan.SetAttributes(attribute.Int64("consumer.consume_ms", time.Since(consumeStart).Milliseconds()))
+
+					// Record deadline and ack metrics
+					if deadline, ok := msgCtx.Deadline(); ok {
+						msgSpan.SetAttributes(attribute.Int64("consumer.msg_ctx_deadline_left_ms", time.Until(deadline).Milliseconds()))
+					}
+					ackStart := time.Now()
+
 					// 正常处理完成后的 ack
 					if err = c.consumer.Ack(ackCtx, msg); err != nil {
+						msgSpan.SetAttributes(attribute.Int64("consumer.ack_ms", time.Since(ackStart).Milliseconds()))
 						msgSpan.RecordError(err)
 						msgSpan.SetStatus(codes.Error, "biz_succss_but_ack_failed: "+err.Error())
 						msgSpan.SetAttributes(attribute.String("ack.error", err.Error()))
 					} else {
+						msgSpan.SetAttributes(attribute.Int64("consumer.ack_ms", time.Since(ackStart).Milliseconds()))
 						msgSpan.SetStatus(codes.Ok, "")
 						msgSpan.SetAttributes(attribute.Bool("ack.success", true))
 					}
