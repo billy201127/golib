@@ -264,10 +264,8 @@ func buildMarkdownCard(items []summaryItem) string {
 		}
 	}
 
-	for i, it := range items {
-		if i > 0 {
-			sb.WriteString("---\n\n")
-		}
+	for _, it := range items {
+		sb.WriteString("---\n\n")
 
 		msg, attrs, extras := parseLogMessage(it.Message)
 
