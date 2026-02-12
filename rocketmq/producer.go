@@ -6,6 +6,7 @@ import (
 
 	rmq "github.com/apache/rocketmq-clients/golang/v5"
 	"github.com/apache/rocketmq-clients/golang/v5/credentials"
+	"github.com/zeromicro/go-zero/core/logc"
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -155,6 +156,7 @@ func (p *Producer) publish(ctx context.Context, topic Topic, msg []byte, opts ..
 
 	result, err := p.Send(sendCtx, message)
 	if err != nil {
+		logc.Errorf(ctx, "send message failed: %v, topic: %s, msg: %s", err, actualTopic, string(msg))
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		logx.WithContext(ctx).Errorf("send message failed: %v, topic: %s, msg: %s", err, actualTopic, string(msg))
@@ -164,6 +166,7 @@ func (p *Producer) publish(ctx context.Context, topic Topic, msg []byte, opts ..
 	// 设置成功状态和消息ID
 	span.SetStatus(codes.Ok, "")
 	span.SetAttributes(attribute.String("message.id", result[0].MessageID))
+	logc.Infof(ctx, "send message success, topic: %s, msgId: %s", actualTopic, result[0].MessageID)
 
 	return nil
 }
