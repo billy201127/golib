@@ -279,20 +279,21 @@ func buildMarkdownCard(items []summaryItem) string {
 		}
 
 		sb.WriteString("```text\n")
-		fmt.Fprintf(&sb, "count = %d\n", it.Count)
+		fmt.Fprintf(&sb, "count: %d\n", it.Count)
 		if v := attrs["time"]; v != "" {
-			fmt.Fprintf(&sb, "time = %s\n", v)
+			fmt.Fprintf(&sb, "time: %s\n", v)
 		}
 		if fn != "" {
-			fmt.Fprintf(&sb, "func = %s\n", fn)
+			fmt.Fprintf(&sb, "func: %s\n", fn)
 		}
 
-		// Force full caller path from runtime frame capture
-		fmt.Fprintf(&sb, "caller = %s\n", file)
+		// Force caller path from runtime frame capture, but truncate to start from project root if possible
+		callerPath := truncateCallerPath(file)
+		fmt.Fprintf(&sb, "caller: %s\n", callerPath)
 
 		for _, k := range []string{"trace", "span"} {
 			if v := attrs[k]; v != "" {
-				fmt.Fprintf(&sb, "%s = %s\n", k, v)
+				fmt.Fprintf(&sb, "%s: %s\n", k, v)
 			}
 		}
 
@@ -301,14 +302,9 @@ func buildMarkdownCard(items []summaryItem) string {
 			sb.WriteByte('\n')
 		}
 
-		sb.WriteString("msg = ")
+		sb.WriteString("msg: ")
 		sb.WriteString(escapeCodeBlock(msg))
 		sb.WriteString("\n")
-		if it.FuncNameFull != "" && it.FuncName != "" && it.FuncNameFull != it.FuncName {
-			sb.WriteString("func_full=")
-			sb.WriteString(escapeCodeBlock(it.FuncNameFull))
-			sb.WriteString("\n")
-		}
 		sb.WriteString("```\n")
 	}
 
@@ -407,6 +403,18 @@ func simplifyFuncName(full string) string {
 func escapeCodeBlock(s string) string {
 	// Prevent breaking out of fenced code blocks.
 	return strings.ReplaceAll(s, "```", "``\u200b`")
+}
+
+func truncateCallerPath(fileLine string) string {
+	// fileLine like: /data/.../microloan/app/.../credit_apply.go:48
+	idx := strings.Index(fileLine, "microloan/")
+	if idx < 0 {
+		idx = strings.Index(fileLine, "microloan\\")
+	}
+	if idx < 0 {
+		return fileLine
+	}
+	return fileLine[idx:]
 }
 
 func truncateContent(content string) string {
