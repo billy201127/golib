@@ -191,29 +191,32 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 			// 记录响应信息
 			log.Status = resp.StatusCode
 			log.Response = string(respBody)
-			log.TimeCost = time.Since(start).Milliseconds()
-			if err != nil {
-				if log.Extend == nil {
-					log.Extend = &LogExtend{}
-				}
-				log.Extend.Expand = err.Error()
+		} else {
+			log.Status = int(http.StatusRequestTimeout)
+		}
+
+		log.TimeCost = time.Since(start).Milliseconds()
+		if err != nil {
+			if log.Extend == nil {
+				log.Extend = &LogExtend{}
 			}
+			log.Extend.Expand = err.Error()
+		}
 
-			// 如果设置了日志处理函数，则推送日志
-			if c.logHandler != nil {
-				logJSON, _ := log.ToJSON()
-				c.logger.Infof("call third log: %s", string(logJSON))
-				// 直接执行，避免阻塞主流程
-				go func() {
-					defer func() {
-						if r := recover(); r != nil {
-							c.logger.Errorf("logHandler panic: %v, stack: %s", r, string(debug.Stack()))
-						}
-					}()
-
-					c.logHandler(log)
+		// 如果设置了日志处理函数，则推送日志
+		if c.logHandler != nil {
+			logJSON, _ := log.ToJSON()
+			c.logger.Infof("call third log: %s", string(logJSON))
+			// 直接执行，避免阻塞主流程
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						c.logger.Errorf("logHandler panic: %v, stack: %s", r, string(debug.Stack()))
+					}
 				}()
-			}
+
+				c.logHandler(log)
+			}()
 		}
 	}()
 
