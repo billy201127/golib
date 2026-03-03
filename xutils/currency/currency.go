@@ -25,3 +25,8 @@ func (c *Currency) ScaleDownInt64(amount int64) int64 {
 func (c *Currency) ScaleUp(amount int64) int64 {
 	return amount * c.Base
 }
+
+func (c *Currency) ScaleUpFloat64(amount float64) int64 {
+	amountInfo := decimal.NewFromFloat(amount).Mul(decimal.NewFromInt(c.Base)).Round(0).IntPart()
+	return amountInfo
+}
