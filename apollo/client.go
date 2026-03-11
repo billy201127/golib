@@ -41,11 +41,15 @@ var (
 )
 
 func NewClient(conf *Config) (*Client, error) {
+	ns := []string{
+		ApplicationNamespace,
+		conf.PrivateSpace,
+	}
 	client, err := agollo.StartWithConfig(func() (*config.AppConfig, error) {
 		return &config.AppConfig{
 			AppID:          conf.AppID,
 			Cluster:        conf.Cluster,
-			NamespaceName:  ApplicationNamespace,
+			NamespaceName:  strings.Join(ns, ","),
 			IP:             conf.Addr,
 			IsBackupConfig: true,
 		}, nil
