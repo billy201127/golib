@@ -7,6 +7,7 @@ import (
 	"github.com/apolloconfig/agollo/v4"
 	"github.com/apolloconfig/agollo/v4/env/config"
 	"github.com/apolloconfig/agollo/v4/storage"
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -26,6 +27,18 @@ type Client struct {
 func (c *Client) GetPrivateJson() []byte {
 	content := strings.TrimPrefix(c.Private.GetContent(), "content=")
 	return []byte(content)
+}
+
+// GetPrivateYamlFromProperties 将 properties 风格内容还原为 YAML（功能等价）
+func (c *Client) GetPrivateYaml() []byte {
+	content := strings.TrimPrefix(c.Private.GetContent(), "content=")
+	props := parsePropertiesInline(content)
+	data := buildNestedMap(props)
+	out, err := yaml.Marshal(data)
+	if err != nil {
+		return []byte(content)
+	}
+	return out
 }
 
 // AddChangeListener 向已存在的客户端添加新的配置变更监听器
