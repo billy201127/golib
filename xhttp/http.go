@@ -165,6 +165,10 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 		}
 	}
 
+	if appID, ok := ctx.Value("APP-ID").(string); ok && appID != "" {
+		req.Header.Set("APP-ID", appID)
+	}
+
 	// 设置请求头
 	for k, v := range header {
 		req.Header.Set(k, v)
