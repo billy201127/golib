@@ -12,6 +12,7 @@ import (
 	rmq "github.com/apache/rocketmq-clients/golang/v5"
 	"github.com/apache/rocketmq-clients/golang/v5/credentials"
 	v2 "github.com/apache/rocketmq-clients/golang/v5/protocol/v2"
+	"github.com/zeromicro/go-zero/core/logc"
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -197,6 +198,7 @@ func (c *Consumer[T]) consume() {
 					)
 					defer msgSpan.End()
 
+					logc.Infof(msgCtx, "receive message, topic: %s, msgId: %s", msg.GetTopic(), msg.GetMessageId())
 					var data T
 					if err = json.Unmarshal(msg.GetBody(), &data); err != nil {
 						c.handler.ErrorHandler(msgCtx, data, err)
@@ -210,6 +212,10 @@ func (c *Consumer[T]) consume() {
 
 					consumeStart := time.Now()
 					msgSpan.SetAttributes(attribute.Int64("consumer.receive_to_consume_ms", time.Since(receiveAt).Milliseconds()))
+
+					if appID, ok := props[string(APP_ID_KEY)]; ok {
+						msgCtx = context.WithValue(msgCtx, APP_ID_KEY, appID)
+					}
 
 					if err = c.handler.Consume(msgCtx, data); err != nil {
 						msgSpan.SetAttributes(attribute.Int64("consumer.consume_ms", time.Since(consumeStart).Milliseconds()))

@@ -11,3 +11,7 @@ func GetTopicName(prefix string, topic Topic) string {
 
 	return fmt.Sprintf("%s_%s", prefix, string(topic))
 }
+
+var (
+	APP_ID_KEY = "APP-ID"
+)

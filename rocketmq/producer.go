@@ -139,6 +139,10 @@ func (p *Producer) publish(ctx context.Context, topic Topic, msg []byte, opts ..
 	message.AddProperty("trace_id", span.SpanContext().TraceID().String())
 	message.AddProperty("span_id", span.SpanContext().SpanID().String())
 
+	if appID, ok := ctx.Value(APP_ID_KEY).(string); ok {
+		message.AddProperty(string(APP_ID_KEY), appID)
+	}
+
 	if opt.ShardingKey != "" {
 		message.SetKeys(opt.ShardingKey)
 	}
