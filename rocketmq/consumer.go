@@ -1,6 +1,7 @@
 package rocketmq
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -200,7 +201,9 @@ func (c *Consumer[T]) consume() {
 
 					logc.Infof(msgCtx, "receive message, topic: %s, msgId: %s", msg.GetTopic(), msg.GetMessageId())
 					var data T
-					if err = json.Unmarshal(msg.GetBody(), &data); err != nil {
+					decoder := json.NewDecoder(bytes.NewReader(msg.GetBody()))
+					decoder.UseNumber()
+					if err = decoder.Decode(&data); err != nil {
 						c.handler.ErrorHandler(msgCtx, data, err)
 						msgSpan.RecordError(err)
 						msgSpan.SetStatus(codes.Error, err.Error())
