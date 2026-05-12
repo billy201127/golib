@@ -21,19 +21,6 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
-const (
-	maxAttributeStringLen = 1024 * 1024 // 1 MiB cap to keep telemetry payloads reasonable
-	maxResponseLogLen     = 2048
-)
-
-func truncateLogString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-
-	return s[:maxLen]
-}
-
 // DefaultTransport 默认的HTTP传输配置
 var DefaultTransport = &http.Transport{
 	MaxIdleConns:        500,
@@ -274,7 +261,7 @@ func (c *Client) Do(ctx context.Context, method string, url string, header map[s
 		req.Method,
 		string(headersJSON),
 		string(body),
-		truncateLogString(string(respBody), maxResponseLogLen),
+		string(respBody),
 	)
 
 	if resp.StatusCode >= 400 {
