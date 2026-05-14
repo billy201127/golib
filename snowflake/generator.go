@@ -1,85 +1,93 @@
 package snowflake
 
 import (
-	"bytes"
-	"fmt"
-	"net"
-	"os"
-
-	"github.com/bwmarrin/snowflake"
+	"crypto/rand"
+	"encoding/binary"
+	"strconv"
+	"sync"
+	"time"
 )
 
-const workerIdBits = 5
-const datacenterIdBits = 5
-const maxWorkerId = -1 ^ (-1 << workerIdBits)
-const maxDatacenterId = -1 ^ (-1 << datacenterIdBits)
-const maxMachineId = -1 ^ (-1 << (workerIdBits + datacenterIdBits))
+const (
+	epoch int64 = 1288834974657
 
-var generator *snowflake.Node
+	sequenceBits   = 10
+	randomNodeBits = 12
 
-func getMacAddr() (mac []byte, err error) {
-	interfaces, err := net.Interfaces()
+	maxSequence   int64 = -1 ^ (-1 << sequenceBits)
+	maxRandomNode int64 = -1 ^ (-1 << randomNodeBits)
 
-	if err != nil {
-		return
-	}
+	sequenceShift  = randomNodeBits
+	timestampShift = sequenceBits + randomNodeBits
+)
 
-	for _, inter := range interfaces {
-		if addresses, e := inter.Addrs(); e == nil {
-			for _, address := range addresses {
-				if ip, ok := address.(*net.IPNet); ok && !ip.IP.IsLoopback() {
-					if v := ip.IP.To4(); v != nil {
-						mac = inter.HardwareAddr
-						return
-					}
-				}
-			}
-		}
-	}
-
-	return
+type idGenerator struct {
+	mu         sync.Mutex
+	randomNode int64
+	lastTime   int64
+	sequence   int64
 }
 
-// see com.baomidou.mybatisplus.core.toolkit.Sequence.getDatacenterId
-func getDatacenterId() int64 {
-	mac, err := getMacAddr()
+var generator *idGenerator
 
-	if err != nil || len(mac) == 0 {
-		return 1
+func newRandomNode() int64 {
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		panic(err)
 	}
 
-	mac = bytes.ReplaceAll(mac, []byte(":"), []byte(""))
-	id := ((0x000000FF & int64(mac[len(mac)-2])) | (0x0000FF00 & (int64(mac[len(mac)-1]) << 8))) >> 6
-	return id % (maxDatacenterId + 1)
+	return int64(binary.BigEndian.Uint64(buf[:])) & maxRandomNode
 }
 
-// see com.baomidou.mybatisplus.core.toolkit.Sequence.getMaxWorkerId
-func getWorkerId(datacenterId int64) int64 {
-	bs := []byte(fmt.Sprintf("%d%d", datacenterId, os.Getpid()))
-	code := uint32(0)
+func currentTimeMillis() int64 {
+	return time.Now().UnixMilli() - epoch
+}
 
-	for _, b := range bs {
-		code = 31*code + uint32(b)
+func waitNextMillis(lastTime int64) int64 {
+	now := currentTimeMillis()
+	for now <= lastTime {
+		time.Sleep(time.Millisecond)
+		now = currentTimeMillis()
 	}
-
-	return (int64(code) & 0xffff) % (maxWorkerId + 1)
-}
-
-func getMachineId() int64 {
-	datacenterId := getDatacenterId()
-	workerId := getWorkerId(datacenterId)
-	return (datacenterId << datacenterIdBits) | workerId
+	return now
 }
 
 func init() {
-	machineId := max(0, min(maxMachineId, getMachineId()))
-	generator, _ = snowflake.NewNode(machineId)
+	generator = &idGenerator{
+		randomNode: newRandomNode(),
+		lastTime:   -1,
+	}
+}
+
+func (g *idGenerator) generate() int64 {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	now := currentTimeMillis()
+	if now < g.lastTime {
+		now = waitNextMillis(g.lastTime)
+	}
+
+	if now == g.lastTime {
+		g.sequence = (g.sequence + 1) & maxSequence
+		if g.sequence == 0 {
+			now = waitNextMillis(g.lastTime)
+		}
+	} else {
+		g.sequence = 0
+	}
+
+	g.lastTime = now
+
+	return (now << timestampShift) |
+		(g.sequence << sequenceShift) |
+		g.randomNode
 }
 
 func Generate() int64 {
-	return generator.Generate().Int64()
+	return generator.generate()
 }
 
 func GenerateString() string {
-	return generator.Generate().String()
+	return strconv.FormatInt(Generate(), 10)
 }
